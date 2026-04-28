@@ -1,0 +1,107 @@
+.login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    width: 100vw;
+    background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d);
+    font-family: 'Inter', sans-serif;
+    color: white;
+}
+
+.login-box {
+    background: rgba(0, 0, 0, 0.6);
+    padding: 40px;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    backdrop-filter: blur(10px);
+    width: 100%;
+    max-width: 400px;
+    text-align: center;
+}
+
+.login-box h2 {
+    margin-top: 0;
+    margin-bottom: 24px;
+    font-size: 2rem;
+    font-weight: bold;
+}
+
+.input-group {
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+.input-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+    color: #ddd;
+}
+
+.input-group input {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    font-size: 1rem;
+    outline: none;
+    transition: background 0.3s;
+    box-sizing: border-box;
+}
+
+.input-group input:focus {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.submit-btn {
+    width: 100%;
+    padding: 14px;
+    background: #ff512f;
+    background: linear-gradient(to right, #dd2476, #ff512f);
+    border: none;
+    border-radius: 6px;
+    color: white;
+    font-size: 1.1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    margin-top: 10px;
+}
+
+.submit-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(221, 36, 118, 0.4);
+}
+
+.submit-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.error-message {
+    color: #ff6b6b;
+    font-size: 0.9rem;
+    margin-bottom: 15px;
+}
+
+.toggle-text {
+    margin-top: 20px;
+    font-size: 0.9rem;
+    color: #bbb;
+}
+
+.toggle-text span {
+    color: #ff512f;
+    cursor: pointer;
+    font-weight: bold;
+    text-decoration: underline;
+}
+
+.toggle-text span:hover {
+    color: #dd2476;
+}

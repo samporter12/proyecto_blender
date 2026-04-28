@@ -1,0 +1,17 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15
+    container_name: game_postgres_db
+    environment:
+      POSTGRES_USER: gameuser
+      POSTGRES_PASSWORD: gamepassword
+      POSTGRES_DB: gamedb
+    ports:
+      - "5433:5432"
+    volumes:
+      - gamedb_postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  gamedb_postgres_data:
