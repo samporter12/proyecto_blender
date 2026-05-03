@@ -8,6 +8,7 @@ export default class Resources extends EventEmitter {
 
         this.sources = sources
         this.items = {}
+        this.cacheByPath = new Map() // 🛡️ Caché para evitar cargas duplicadas del mismo archivo
         this.toLoad = this.sources.length
         this.loaded = 0
 
@@ -31,7 +32,23 @@ export default class Resources extends EventEmitter {
             
             const source = this.sources[currentIndex++];
 
+            // 🛡️ Verificar si ya existe una carga en progreso o terminada para este PATH
+            if (this.cacheByPath.has(source.path)) {
+                const cachedPromise = this.cacheByPath.get(source.path);
+                cachedPromise.then((file) => {
+                    this.sourceLoaded(source, file);
+                    loadNext();
+                });
+                return;
+            }
+
+            // Crear una promesa para esta ruta específica
+            let resolveLoad;
+            const loadPromise = new Promise((resolve) => { resolveLoad = resolve; });
+            this.cacheByPath.set(source.path, loadPromise);
+
             const onLoad = (file) => {
+                resolveLoad(file);
                 this.sourceLoaded(source, file);
                 loadNext(); // load next item when this one finishes
             };

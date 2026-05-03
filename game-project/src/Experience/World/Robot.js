@@ -42,7 +42,7 @@ export default class Robot {
             mass: 2,
             shape: shape,
             position: new CANNON.Vec3(0, 1.2, 0),
-            linearDamping: 0.05,
+            linearDamping: 0.1, // 🛡️ Aumentado de 0.05 para mayor estabilidad
             angularDamping: 0.9
         })
 
@@ -123,10 +123,11 @@ export default class Robot {
         const turnSpeed = 2.5
         let isMoving = false
 
-        // Limitar velocidad si es demasiado alta
-        const maxSpeed = isRunning ? 35 : 15
+        // Limitar velocidad si es demasiado alta en todos los ejes
+        const maxSpeed = isRunning ? 25 : 12 // 🛡️ Ajustado para ser más controlado
         this.body.velocity.x = Math.max(Math.min(this.body.velocity.x, maxSpeed), -maxSpeed)
         this.body.velocity.z = Math.max(Math.min(this.body.velocity.z, maxSpeed), -maxSpeed)
+        this.body.velocity.y = Math.max(Math.min(this.body.velocity.y, 20), -20) // 🛡️ Limitar velocidad vertical
 
 
         // Salto
@@ -139,11 +140,12 @@ export default class Robot {
             this.animation.play('jump')
             return
         }
-        //No permitir que el robot salga del escenario
-        if (this.body.position.y > 10) {
-            console.warn(' Robot fuera del escenario. Reubicando...')
+        // 🛡️ No permitir que el robot salga del escenario (Aumentado a 25 para evitar falsos positivos)
+        if (this.body.position.y > 25 || this.body.position.y < -5) {
+            console.warn('⚠️ Robot fuera del escenario. Reubicando...')
             this.body.position.set(0, 1.2, 0)
             this.body.velocity.set(0, 0, 0)
+            this.body.angularVelocity.set(0, 0, 0)
         }
 
 
@@ -172,12 +174,14 @@ export default class Robot {
         // Rotación
         if (keys.left) {
             this.group.rotation.y += turnSpeed * delta
-            this.body.quaternion.setFromEuler(0, this.group.rotation.y, 0)
         }
         if (keys.right) {
             this.group.rotation.y -= turnSpeed * delta
-            this.body.quaternion.setFromEuler(0, this.group.rotation.y, 0)
         }
+        
+        // 🛡️ Sincronizar el cuerpo físico con la rotación visual de forma segura
+        this.body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), this.group.rotation.y)
+        this.body.angularVelocity.set(0, 0, 0) // Evitar rotaciones locas inducidas por colisiones
 
 
         // Animaciones según movimiento

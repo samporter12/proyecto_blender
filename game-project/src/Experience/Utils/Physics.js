@@ -30,9 +30,9 @@ export default class Physics {
             {
                 friction: 0.6,
                 restitution: 0.0,
-                contactEquationStiffness: 1e9,
-                contactEquationRelaxation: 3,
-                frictionEquationStiffness: 1e7,
+                contactEquationStiffness: 1e6, // 🛡️ Aún más bajo para máxima estabilidad
+                contactEquationRelaxation: 5, // 🛡️ Más suave
+                frictionEquationStiffness: 1e6,
                 frictionEquationRelaxation: 3
             }
         )
@@ -44,32 +44,21 @@ export default class Physics {
             {
                 friction: 0.6,
                 restitution: 0.0,
-                contactEquationStiffness: 1e9,
-                contactEquationRelaxation: 2,
-                frictionEquationStiffness: 1e7,
-                frictionEquationRelaxation: 2
+                contactEquationStiffness: 1e6,
+                contactEquationRelaxation: 6, // 🛡️ Máxima amortiguación en bordes
+                frictionEquationStiffness: 1e6,
+                frictionEquationRelaxation: 3
             }
         )
         this.world.addContactMaterial(robotWallContact)
     }
 
     update(delta) {
-        // 💣 Limpia cualquier shape corrupto o desconectado
-        this.world.bodies = this.world.bodies.filter(body => {
-            if (!body || !Array.isArray(body.shapes) || body.shapes.length === 0) return false
-
-            for (const shape of body.shapes) {
-                if (!shape || !shape.body || shape.body !== body) return false
-            }
-
-            return true
-        })
-
         // ✅ Intenta avanzar la simulación sin romper
         try {
-            this.world.step(1 / 60, delta, 3)
+            // 🛡️ Aumentado de 3 a 10 sub-pasos para mayor estabilidad en bordes
+            this.world.step(1 / 60, delta, 10)
         } catch (err) {
-            // Silenciar solo el error exacto de wakeUpAfterNarrowphase
             if (err?.message?.includes('wakeUpAfterNarrowphase')) {
                 console.warn('⚠️ Cannon encontró un shape corrupto residual. Ignorado.')
             } else {
