@@ -366,7 +366,7 @@ export default class World {
 
                 data = {
                     blocks: filteredBlocks,
-                    spawnPoint: { x: -17, y: 1.5, z: -67 } // valor por defecto si no viene en JSON
+                    spawnPoint: { x: 5, y: 1.5, z: 5 }
                 };
             }
 
@@ -437,14 +437,21 @@ export default class World {
         });
 
         childrenToRemove.forEach((child) => {
-            if (child.geometry) child.geometry.dispose();
-            if (child.material) {
-                if (Array.isArray(child.material)) {
-                    child.material.forEach(mat => mat.dispose());
-                } else {
-                    child.material.dispose();
+            // 🛡️ Liberación profunda de memoria
+            child.traverse((obj) => {
+                if (obj.geometry) obj.geometry.dispose();
+                if (obj.material) {
+                    if (Array.isArray(obj.material)) {
+                        obj.material.forEach(mat => {
+                            if (mat.map) mat.map.dispose();
+                            mat.dispose();
+                        });
+                    } else {
+                        if (obj.material.map) obj.material.map.dispose();
+                        obj.material.dispose();
+                    }
                 }
-            }
+            });
 
             this.scene.remove(child);
 
@@ -537,7 +544,7 @@ export default class World {
 
     }
 
-    resetRobotPosition(spawn = { x: -17, y: 1.5, z: -67 }) {
+    resetRobotPosition(spawn = { x: 5, y: 1.5, z: 5 }) {
         if (!this.robot) return
         this.robot.respawn(new THREE.Vector3(spawn.x, spawn.y, spawn.z))
     }
