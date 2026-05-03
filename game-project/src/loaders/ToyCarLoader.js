@@ -22,8 +22,30 @@ export default class ToyCarLoader {
         });
 
         if (matchedMeshes.length === 0) {
-            // Evitar ruido en consola si no hay objetivos en este modelo
-            // console.debug(`Sin meshes objetivo para ${imagePath} en este modelo.`)
+            return;
+        }
+
+        // 🛡️ Caché de texturas para evitar duplicar 6GB de RAM
+        if (!this.textureCache) this.textureCache = {};
+        const cacheKey = `${imagePath}_${JSON.stringify(options)}`;
+        
+        if (this.textureCache[cacheKey]) {
+            const texture = this.textureCache[cacheKey];
+            let applied = 0;
+            matchedMeshes.forEach((child) => {
+                if (Array.isArray(child.material)) {
+                    child.material.forEach((mat) => {
+                        mat.map = texture;
+                        mat.needsUpdate = true;
+                    });
+                } else if (child.material) {
+                    child.material.map = texture;
+                    child.material.needsUpdate = true;
+                } else {
+                    child.material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
+                }
+                applied++;
+            });
             return;
         }
 
@@ -31,6 +53,7 @@ export default class ToyCarLoader {
         textureLoader.load(
             imagePath,
             (texture) => {
+                this.textureCache[cacheKey] = texture; // Guardar en caché
                 if ('colorSpace' in texture) {
                     texture.colorSpace = THREE.SRGBColorSpace;
                 } else {
@@ -164,6 +187,29 @@ export default class ToyCarLoader {
                 return;
             }
 
+            //  Si es un premio (coin) — usar coinModel directamente, sin requerir GLB propio
+            if (block.name.startsWith('coin')) {
+                const coinScene = this.resources.items.coinModel?.scene;
+                if (!coinScene) {
+                    console.warn('coinModel no encontrado en resources');
+                    return;
+                }
+                const actualModel = coinScene.clone();
+
+                const prize = new Prize({
+                    model: actualModel,
+                    position: new THREE.Vector3(block.x, block.y, block.z),
+                    scene: this.scene,
+                    role: block.role || "default"
+                });
+
+                // 🔵 MARCAR modelo del premio
+                prize.model.userData.levelObject = true;
+
+                this.prizes.push(prize);
+                return;
+            }
+
             const resourceKey = block.name;
             const glb = this.resources.items[resourceKey];
 
@@ -214,26 +260,6 @@ export default class ToyCarLoader {
                         }
                     }
                 });
-            }
-
-            //  Si es un premio (coin)
-            if (block.name.startsWith('coin')) {
-                const coinScene = this.resources.items.coinModel?.scene
-                const actualModel = coinScene ? coinScene.clone() : model
-                
-                const prize = new Prize({
-                    model: actualModel,
-                    position: new THREE.Vector3(block.x, block.y, block.z),
-                    scene: this.scene,
-                    role: block.role || "default"
-                });
-
-                // 🔵 MARCAR modelo del premio
-                prize.model.userData.levelObject = true;
-
-                this.prizes.push(prize);
-                //this.scene.add(prize.model);
-                return;
             }
 
             this.scene.add(model);
