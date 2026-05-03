@@ -9052,7 +9052,7 @@
         "z": -0.0,
         "level": 4
     },
-        {
+    {
         "name": "cylinder_lev4_lev5",
         "x": 11.79697036743164,
         "y": 0.11372452974319458,
@@ -10381,5 +10381,93 @@
         "y": -1.6753267049789429,
         "z": -8.336605072021484,
         "level": 5
+    },
+    {
+        "name": "coin_lev4_1",
+        "x": 5.0,
+        "y": 2.0,
+        "z": 0.0,
+        "level": 4,
+        "role": "default"
+    },
+    {
+        "name": "coin_lev4_2",
+        "x": -5.0,
+        "y": 2.0,
+        "z": 0.0,
+        "level": 4,
+        "role": "default"
+    },
+    {
+        "name": "coin_lev4_3",
+        "x": 0.0,
+        "y": 2.0,
+        "z": -8.0,
+        "level": 4,
+        "role": "default"
+    },
+    {
+        "name": "coin_lev4_4",
+        "x": 8.0,
+        "y": 2.0,
+        "z": 6.0,
+        "level": 4,
+        "role": "default"
+    },
+    {
+        "name": "coin_lev4_5",
+        "x": -6.0,
+        "y": 2.0,
+        "z": 6.0,
+        "level": 4,
+        "role": "default"
+    },
+    {
+        "name": "coin_lev5_1",
+        "x": 0.0,
+        "y": 3.0,
+        "z": 0.0,
+        "level": 5,
+        "role": "default"
+    },
+    {
+        "name": "coin_lev5_2",
+        "x": 25.0,
+        "y": 3.0,
+        "z": 0.0,
+        "level": 5,
+        "role": "default"
+    },
+    {
+        "name": "coin_lev5_3",
+        "x": -25.0,
+        "y": 3.0,
+        "z": 0.0,
+        "level": 5,
+        "role": "default"
+    },
+    {
+        "name": "coin_lev5_4",
+        "x": 0.0,
+        "y": 3.0,
+        "z": 25.0,
+        "level": 5,
+        "role": "default"
+    },
+    {
+        "name": "coin_lev5_5",
+        "x": 0.0,
+        "y": 3.0,
+        "z": -25.0,
+        "level": 5,
+        "role": "default"
+    },
+    {
+        "name": "coin_lev5_6",
+        "x": 30.0,
+        "y": 3.0,
+        "z": 30.0,
+        "level": 5,
+        "role": "default"
     }
 ]
