@@ -1328,5 +1328,53 @@
         "y": -1.6753267049789429,
         "z": -8.336605072021484,
         "level": 5
+    },
+    {
+        "name": "coin_lev5_1",
+        "x": 0.0,
+        "y": 3.0,
+        "z": 0.0,
+        "level": 5,
+        "role": "default"
+    },
+    {
+        "name": "coin_lev5_2",
+        "x": 25.0,
+        "y": 3.0,
+        "z": 0.0,
+        "level": 5,
+        "role": "default"
+    },
+    {
+        "name": "coin_lev5_3",
+        "x": -25.0,
+        "y": 3.0,
+        "z": 0.0,
+        "level": 5,
+        "role": "default"
+    },
+    {
+        "name": "coin_lev5_4",
+        "x": 0.0,
+        "y": 3.0,
+        "z": 25.0,
+        "level": 5,
+        "role": "default"
+    },
+    {
+        "name": "coin_lev5_5",
+        "x": 0.0,
+        "y": 3.0,
+        "z": -25.0,
+        "level": 5,
+        "role": "default"
+    },
+    {
+        "name": "coin_lev5_6",
+        "x": 30.0,
+        "y": 3.0,
+        "z": 30.0,
+        "level": 5,
+        "role": "default"
     }
 ]
