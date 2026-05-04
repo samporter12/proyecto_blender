@@ -20,6 +20,9 @@ const Game = () => {
     return () => {
       window.removeEventListener('resource-progress', handleProgress)
       window.removeEventListener('resource-complete', handleComplete)
+      if (experience) {
+        experience.destroy();
+      }
     }
   }, [])
 

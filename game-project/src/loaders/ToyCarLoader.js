@@ -298,6 +298,10 @@ export default class ToyCarLoader {
             model.userData.physicsBody = body;
             body.userData.linkedModel = model;
             this.physics.world.addBody(body);
+            
+            if (this.experience.world && this.experience.world.levelPhysicsObjects) {
+                this.experience.world.levelPhysicsObjects.push(model);
+            }
         });
     }
 

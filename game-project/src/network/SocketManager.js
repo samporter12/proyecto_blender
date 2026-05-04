@@ -148,11 +148,17 @@ export default class SocketManager {
 
 
     update(delta) {
-        const robot = this.experience.world?.robot?.group
-        if (robot) {
-            const pos = robot.position
-            const rotY = robot.rotation.y
-            this.sendTransform(pos, rotY)
+        if (!this.lastSendTime) this.lastSendTime = 0
+        this.lastSendTime += delta
+
+        if (this.lastSendTime > 0.05) {
+            this.lastSendTime = 0
+            const robot = this.experience.world?.robot?.group
+            if (robot) {
+                const pos = robot.position
+                const rotY = robot.rotation.y
+                this.sendTransform(pos, rotY)
+            }
         }
 
         for (const id in this.robots) {

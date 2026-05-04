@@ -34,6 +34,7 @@ export default class World {
 
         this.allowPrizePickup = false
         this.hasMoved = false
+        this.levelPhysicsObjects = []
 
         setTimeout(() => {
             this.allowPrizePickup = true
@@ -306,19 +307,21 @@ export default class World {
             ? this.experience.camera.instance.position
             : this.robot?.body?.position
 
-        this.scene.traverse((obj) => {
-            if (obj.userData?.levelObject && obj.userData.physicsBody) {
-                const dist = obj.position.distanceTo(playerPos)
-                const shouldEnable = dist < 40 && obj.visible
+        if (playerPos && this.levelPhysicsObjects) {
+            for (const obj of this.levelPhysicsObjects) {
+                if (obj.visible) {
+                    const dist = obj.position.distanceTo(playerPos)
+                    const shouldEnable = dist < 40
 
-                const body = obj.userData.physicsBody
-                if (shouldEnable && !body.enabled) {
-                    body.enabled = true
-                } else if (!shouldEnable && body.enabled) {
-                    body.enabled = false
+                    const body = obj.userData.physicsBody
+                    if (shouldEnable && !body.enabled) {
+                        body.enabled = true
+                    } else if (!shouldEnable && body.enabled) {
+                        body.enabled = false
+                    }
                 }
             }
-        })
+        }
     }
 
 
@@ -435,6 +438,8 @@ export default class World {
                 childrenToRemove.push(child);
             }
         });
+
+        this.levelPhysicsObjects = [];
 
         childrenToRemove.forEach((child) => {
             // 🛡️ Liberación profunda de memoria
