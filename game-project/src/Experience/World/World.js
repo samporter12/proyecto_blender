@@ -161,6 +161,8 @@ export default class World {
                             text: '❌ Salir',
                             onClick: () => {
                                 localStorage.removeItem('token')
+                                localStorage.removeItem('isGuest')
+                                localStorage.removeItem('username')
                                 window.location.reload()
                             }
                         }

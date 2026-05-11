@@ -43,14 +43,18 @@ export default class GameTracker {
     }
 
     saveTime(seconds) {
-        const stored = JSON.parse(localStorage.getItem('bestTimes') || '[]')
+        const username = localStorage.getItem('username') || 'guest'
+        const key = `bestTimes_${username}`
+        const stored = JSON.parse(localStorage.getItem(key) || '[]')
         stored.push(seconds)
         stored.sort((a, b) => a - b)
-        localStorage.setItem('bestTimes', JSON.stringify(stored.slice(0, 5)))
+        localStorage.setItem(key, JSON.stringify(stored.slice(0, 5)))
     }
 
     getBestTimes() {
-        return JSON.parse(localStorage.getItem('bestTimes') || '[]')
+        const username = localStorage.getItem('username') || 'guest'
+        const key = `bestTimes_${username}`
+        return JSON.parse(localStorage.getItem(key) || '[]')
     }
 
     //Modal de fin de juego

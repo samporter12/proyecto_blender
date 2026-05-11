@@ -610,36 +610,6 @@ export const sources = [
         "path": "/models/toycar/circle_lev3.glb"
     },
     {
-        "name": "coin_structure_detailed_lev1.001_lev3",
-        "type": "gltfModel",
-        "path": "/models/toycar/coin_structure_detailed_lev1.001_lev3.glb"
-    },
-    {
-        "name": "coin_structure_detailed_lev1.002_lev3",
-        "type": "gltfModel",
-        "path": "/models/toycar/coin_structure_detailed_lev1.002_lev3.glb"
-    },
-    {
-        "name": "coin_structure_detailed_lev1.003_lev3",
-        "type": "gltfModel",
-        "path": "/models/toycar/coin_structure_detailed_lev1.003_lev3.glb"
-    },
-    {
-        "name": "coin_structure_detailed_lev1.004_lev3",
-        "type": "gltfModel",
-        "path": "/models/toycar/coin_structure_detailed_lev1.004_lev3.glb"
-    },
-    {
-        "name": "coin_structure_detailed_lev1.005_lev3",
-        "type": "gltfModel",
-        "path": "/models/toycar/coin_structure_detailed_lev1.005_lev3.glb"
-    },
-    {
-        "name": "coin_structure_detailed_lev1_lev3",
-        "type": "gltfModel",
-        "path": "/models/toycar/coin_structure_detailed_lev1_lev3.glb"
-    },
-    {
         "name": "cube.001_lev3",
         "type": "gltfModel",
         "path": "/models/toycar/cube.001_lev3.glb"

@@ -66,6 +66,14 @@ const Login = ({ setToken }) => {
                     <button type="submit" disabled={loading} className="submit-btn">
                         {loading ? 'Cargando...' : (isLogin ? 'Entrar al Juego' : 'Crear Cuenta')}
                     </button>
+                    <button 
+                        type="button" 
+                        onClick={() => setToken(null, true)} 
+                        className="submit-btn guest-btn" 
+                        style={{marginTop: '10px', backgroundColor: '#6c757d'}}
+                    >
+                        Jugar como Invitado
+                    </button>
                 </form>
                 <p className="toggle-text">
                     {isLogin ? '¿No tienes cuenta? ' : '¿Ya tienes cuenta? '}
