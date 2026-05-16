@@ -152,7 +152,7 @@ export default class ToyCarLoader {
 
             }
 
-            this._processBlocks(blocks, precisePhysicsModels);
+            await this._processBlocks(blocks, precisePhysicsModels);
         } catch (err) {
             console.error('Error al cargar bloques o lista Trimesh:', err);
         }
@@ -169,13 +169,44 @@ export default class ToyCarLoader {
             const blocks = await res.json();
             console.log(`📦 Bloques cargados (${blocks.length}) desde ${apiUrl}`);
 
-            this._processBlocks(blocks, precisePhysicsModels);
+            await this._processBlocks(blocks, precisePhysicsModels);
         } catch (err) {
             console.error('Error al cargar bloques desde URL:', err);
         }
     }
 
-    _processBlocks(blocks, precisePhysicsModels) {
+    async _processBlocks(blocks, precisePhysicsModels) {
+        const missingModels = new Set();
+        blocks.forEach(block => {
+            if (block.name && !block.name.startsWith('coin') && !block.name.toLowerCase().includes('plane')) {
+                if (!this.resources.items[block.name]) {
+                    missingModels.add(block.name);
+                }
+            }
+        });
+
+        if (missingModels.size > 0) {
+            console.log(`⏳ Cargando ${missingModels.size} modelos faltantes dinámicamente...`);
+            const gltfLoader = this.resources.loaders.gltfLoader;
+            
+            const base = import.meta.env.BASE_URL || '/';
+            const publicPath = (p) => `${base.replace(/\/$/, '')}/${p.replace(/^\//, '')}`;
+            
+            const loadPromises = Array.from(missingModels).map(name => {
+                return new Promise((resolve) => {
+                    gltfLoader.load(publicPath(`models/toycar/${name}.glb`), (glb) => {
+                        this.resources.items[name] = glb;
+                        resolve();
+                    }, undefined, (err) => {
+                        console.warn(`⚠️ No se pudo cargar dinámicamente el modelo faltante: ${name}`, err);
+                        resolve();
+                    });
+                });
+            });
+            await Promise.all(loadPromises);
+            console.log(`✅ Carga dinámica completada.`);
+        }
+
         blocks.forEach(block => {
             if (!block.name) {
                 console.warn('Bloque sin nombre:', block);

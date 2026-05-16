@@ -119,24 +119,36 @@ export default class Robot {
 
         const keys = this.keyboard.getState()
         const isRunning = keys.shift
-        const moveForce = isRunning ? 250 : 80
-        const turnSpeed = 2.5
+        // Aumentado para mayor velocidad y respuesta
+        const moveForce = isRunning ? 400 : 180
+        const turnSpeed = 3.5
         let isMoving = false
 
-        // Limitar velocidad si es demasiado alta en todos los ejes
-        const maxSpeed = isRunning ? 25 : 12 // 🛡️ Ajustado para ser más controlado
+        // Fricción artificial en el eje horizontal para evitar salir volando por colisiones
+        // y para detenerse más rápido al soltar las teclas
+        if (this.body.position.y <= 1.0) {
+            this.body.velocity.x *= 0.85
+            this.body.velocity.z *= 0.85
+        }
+
+        // Limitar velocidad horizontal máxima para no descontrolarse
+        const maxSpeed = isRunning ? 35 : 15
         this.body.velocity.x = Math.max(Math.min(this.body.velocity.x, maxSpeed), -maxSpeed)
         this.body.velocity.z = Math.max(Math.min(this.body.velocity.z, maxSpeed), -maxSpeed)
-        this.body.velocity.y = Math.max(Math.min(this.body.velocity.y, 20), -20) // 🛡️ Limitar velocidad vertical
-
+        
+        // Limitar fuertemente la velocidad vertical positiva (salvo cuando salta) para evitar salir disparado
+        this.body.velocity.y = Math.max(Math.min(this.body.velocity.y, 8), -20) 
 
         // Salto
         // Dirección hacia adelante, independientemente del salto o movimiento
         const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.group.quaternion)
 
         // Salto (radio de esfera es 0.6, el centro al descansar está en ~0.6)
-        if (keys.space && this.body.position.y <= 0.7) {
-            this.body.applyImpulse(new CANNON.Vec3(forward.x * 0.5, 5, forward.z * 0.5))
+        if (keys.space && this.body.position.y <= 0.8) {
+            // Se asigna la velocidad directamente para un salto más consistente en vez de un impulso
+            this.body.velocity.y = 6
+            this.body.velocity.x += forward.x * 2
+            this.body.velocity.z += forward.z * 2
             this.animation.play('jump')
             return
         }
@@ -218,7 +230,7 @@ export default class Robot {
             const dir2D = mobile.directionVector
             const dir3D = new THREE.Vector3(dir2D.x, 0, dir2D.y).normalize()
 
-            const adjustedSpeed = 250 * mobile.intensity // velocidad más fluida
+            const adjustedSpeed = 400 * mobile.intensity // velocidad más fluida y rápida
             const force = new CANNON.Vec3(dir3D.x * adjustedSpeed, 0, dir3D.z * adjustedSpeed)
 
             this.body.applyForce(force, this.body.position)
