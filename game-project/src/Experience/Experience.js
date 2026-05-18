@@ -39,7 +39,7 @@ export default class Experience {
     this.time = new Time()
     this.scene = new THREE.Scene()
     this.physics = new Physics()
-    this.debugger = cannonDebugger(this.scene, this.physics.world, { color: 0x00ff00 })
+    this.debugger = this.debug.active ? cannonDebugger(this.scene, this.physics.world, { color: 0x00ff00 }) : null
     this.keyboard = new KeyboardControls()
 
     this.scene.background = new THREE.Color('#87ceeb')
@@ -117,8 +117,7 @@ export default class Experience {
       onCancelGame: () => this.tracker.handleCancelGame() // 🔴 aquí se integra la lógica central
     })
 
-    //Generar obstaculos
-    this._startObstacleWaves()
+    // Las olas de obstáculos se inician al arrancar el juego, no en el constructor
 
 
 

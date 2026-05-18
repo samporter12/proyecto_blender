@@ -56,8 +56,9 @@ export default class Physics {
     update(delta) {
         // ✅ Intenta avanzar la simulación sin romper
         try {
-            // 🛡️ Aumentado de 3 a 10 sub-pasos para mayor estabilidad en bordes
-            this.world.step(1 / 60, delta, 10)
+            // 🛡️ Reducido de 10 a 4 sub-pasos para mejor rendimiento con muchos bloques estáticos
+            const maxSubSteps = (delta < 1 / 30) ? 4 : 8;
+            this.world.step(1 / 60, delta, maxSubSteps)
         } catch (err) {
             if (err?.message?.includes('wakeUpAfterNarrowphase')) {
                 console.warn('⚠️ Cannon encontró un shape corrupto residual. Ignorado.')

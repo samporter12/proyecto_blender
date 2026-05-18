@@ -7202,4 +7202,5 @@ export default [
         "type": "gltfModel",
         "path": "/models/toycar/tree-pine-large.012_lev1_lev5.glb"
     }
+
 ]

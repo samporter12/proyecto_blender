@@ -24,6 +24,7 @@ export default class World {
         this.finalPrizeActivated = false
         this.gameStarted = false
         this.enemies = []
+        this.distanceCheckFrame = 0
 
         this.coinSound = new Sound('/sounds/coin.ogg')
         this.ambientSound = new AmbientSound('/sounds/ambiente.mp3')
@@ -50,12 +51,9 @@ export default class World {
             this.fox = new Fox(this.experience)
             this.robot = new Robot(this.experience)
 
-            // Enemigos múltiples: plantilla y spawn lejos del jugador
             this.enemyTemplate = this.resources.items.zombieModel.scene
             this.enemyAnimations = this.resources.items.zombieModel.animations
-            const enemiesCountEnv = parseInt(import.meta.env.VITE_ENEMIES_COUNT || '3', 10)
-            const enemiesCount = Number.isFinite(enemiesCountEnv) && enemiesCountEnv > 0 ? enemiesCountEnv : 3
-            this.spawnEnemies(enemiesCount)
+            this.spawnEnemies(3)
 
             this.experience.vr.bindCharacter(this.robot)
             this.thirdPersonCamera = new ThirdPersonCamera(this.experience, this.robot.group)
@@ -178,6 +176,7 @@ export default class World {
         }
 
         this.loader?.prizes?.forEach(p => p.update(delta))
+        this.loader?.portalModels?.forEach(m => m.rotation.y += delta * 0.6)
 
         if (!this.allowPrizePickup || !this.loader || !this.robot || !this.robot.body) return
 
@@ -304,22 +303,25 @@ export default class World {
             this.discoRaysGroup.rotation.y += delta * 0.5
         }
 
-        // Optimización física por distancia
-        const playerPos = this.experience.renderer.instance.xr.isPresenting
-            ? this.experience.camera.instance.position
-            : this.robot?.body?.position
+        // Optimización física por distancia (cada 10 frames)
+        this.distanceCheckFrame++
+        if (this.distanceCheckFrame % 10 === 0) {
+            const playerPos = this.experience.renderer.instance.xr.isPresenting
+                ? this.experience.camera.instance.position
+                : this.robot?.body?.position
 
-        if (playerPos && this.levelPhysicsObjects) {
-            for (const obj of this.levelPhysicsObjects) {
-                if (obj.visible) {
-                    const distSq = obj.position.distanceToSquared(playerPos)
-                    const shouldEnable = distSq < 1600 // 40 * 40
+            if (playerPos && this.levelPhysicsObjects) {
+                for (const obj of this.levelPhysicsObjects) {
+                    if (obj.visible) {
+                        const distSq = obj.position.distanceToSquared(playerPos)
+                        const shouldEnable = distSq < 1600
 
-                    const body = obj.userData.physicsBody
-                    if (shouldEnable && !body.enabled) {
-                        body.enabled = true
-                    } else if (!shouldEnable && body.enabled) {
-                        body.enabled = false
+                        const body = obj.userData.physicsBody
+                        if (shouldEnable && !body.enabled) {
+                            body.enabled = true
+                        } else if (!shouldEnable && body.enabled) {
+                            body.enabled = false
+                        }
                     }
                 }
             }
@@ -328,6 +330,7 @@ export default class World {
 
 
     async loadLevel(level) {
+        window.dispatchEvent(new CustomEvent('level-loading-start', { detail: level }));
         try {
             const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
             const apiUrl = `${backendUrl}/api/blocks?level=${level}`;
@@ -422,13 +425,13 @@ export default class World {
 
             this.resetRobotPosition(spawnPoint);
 
-            const enemiesCountEnv = parseInt(import.meta.env.VITE_ENEMIES_COUNT || '3', 10);
-            const enemiesCount = Number.isFinite(enemiesCountEnv) && enemiesCountEnv > 0 ? enemiesCountEnv : 3;
-            this.spawnEnemies(enemiesCount);
+            this.spawnEnemies(3);
 
             console.log(`✅ Nivel ${level} cargado con spawn en`, spawnPoint);
         } catch (error) {
             console.error('❌ Error cargando nivel:', error);
+        } finally {
+            window.dispatchEvent(new CustomEvent('level-loading-end'));
         }
     }
 
@@ -477,39 +480,15 @@ export default class World {
             visualObjectsRemoved++;
         });
 
-        let physicsBodiesRemaining = -1;
+        const bodiesToRemove = this.experience.physics.world.bodies.filter(
+            body => body.userData && body.userData.levelObject
+        );
+        bodiesToRemove.forEach(body => {
+            this.experience.physics.world.removeBody(body);
+            physicsBodiesRemoved++;
+        });
 
-        if (this.experience.physics && this.experience.physics.world && Array.isArray(this.experience.physics.bodies)) {
-            const survivingBodies = [];
-            let bodiesBefore = this.experience.physics.bodies.length;
-
-            this.experience.physics.bodies.forEach((body) => {
-                if (body.userData && body.userData.levelObject) {
-                    this.experience.physics.world.removeBody(body);
-                    physicsBodiesRemoved++;
-                } else {
-                    survivingBodies.push(body);
-                }
-            });
-
-            this.experience.physics.bodies = survivingBodies;
-
-            console.log(`🧹 Physics Cleanup Report:`);
-            console.log(`✅ Cuerpos físicos eliminados: ${physicsBodiesRemoved}`);
-            console.log(`🎯 Cuerpos físicos sobrevivientes: ${survivingBodies.length}`);
-            console.log(`📦 Estado inicial: ${bodiesBefore} cuerpos → Estado final: ${survivingBodies.length} cuerpos`);
-        } else {
-            console.warn('⚠️ Physics system no disponible o sin cuerpos activos, omitiendo limpieza física.');
-        }
-
-        console.log(`🧹 Escena limpiada antes de cargar el nuevo nivel.`);
-        console.log(`✅ Objetos 3D eliminados: ${visualObjectsRemoved}`);
-        console.log(`✅ Cuerpos físicos eliminados: ${physicsBodiesRemoved}`);
-        console.log(`🎯 Objetos 3D actuales en escena: ${this.scene.children.length}`);
-
-        if (physicsBodiesRemaining !== -1) {
-            console.log(`🎯 Cuerpos físicos actuales en Physics World: ${physicsBodiesRemaining}`);
-        }
+        console.log(`🧹 Escena limpiada: ${visualObjectsRemoved} objetos 3D, ${physicsBodiesRemoved} cuerpos físicos eliminados. Restantes en world: ${this.experience.physics.world.bodies.length}`);
 
         if (this.enemies?.length) {
             this.enemies.forEach(e => e?.destroy?.());
@@ -519,8 +498,10 @@ export default class World {
 
         if (this.loader && this.loader.prizes.length > 0) {
             this.loader.prizes.forEach(prize => {
+                if (prize.pivot) {
+                    this.scene.remove(prize.pivot);
+                }
                 if (prize.model) {
-                    this.scene.remove(prize.model);
                     if (prize.model.geometry) prize.model.geometry.dispose();
                     if (prize.model.material) {
                         if (Array.isArray(prize.model.material)) {
@@ -533,6 +514,10 @@ export default class World {
             });
             this.loader.prizes = [];
             console.log('🎯 Premios del nivel anterior eliminados correctamente.');
+        }
+
+        if (this.loader) {
+            this.loader.portalModels = [];
         }
 
         this.finalPrizeActivated = false

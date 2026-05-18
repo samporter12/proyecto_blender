@@ -10,9 +10,11 @@ export default class Enemy {
         this.scene = scene
         this.physicsWorld = physicsWorld
         this.playerRef = playerRef
-        this.baseSpeed = 1.0  //Control velocidad del enemigo
+        this.baseSpeed = 1.0
         this.speed = this.baseSpeed
-		this.delayActivation = 0 // activo de inmediato en modo escritorio
+		this.delayActivation = 0
+        this._targetPos = new CANNON.Vec3()
+        this._direction = new CANNON.Vec3()
 
         // Clone model visual using SkeletonUtils for SkinnedMeshes
         this.model = SkeletonUtils.clone(model)
@@ -106,53 +108,47 @@ export default class Enemy {
 
 		if (!this.body || !this.playerRef?.body) return
 
-		const targetPos = new CANNON.Vec3(
-			this.playerRef.body.position.x,
-			this.playerRef.body.position.y,
-			this.playerRef.body.position.z
-		)
-
         const enemyPos = this.body.position
 
-        //  Volumen según cercanía
-        const distance = enemyPos.distanceTo(targetPos)
-        if (distance < 4) {
+        this._targetPos.set(
+            this.playerRef.body.position.x,
+            this.playerRef.body.position.y,
+            this.playerRef.body.position.z
+        )
+
+        const dx = this._targetPos.x - enemyPos.x
+        const dz = this._targetPos.z - enemyPos.z
+
+        const distanceSq = dx * dx + dz * dz
+
+        if (distanceSq < 16) {
             this.speed = 2.5
         } else {
             this.speed = this.baseSpeed
         }
-        const maxDistance = 10
-        const clampedDistance = Math.min(distance, maxDistance)
-        const proximityVolume = 1 - (clampedDistance / maxDistance)
+
+        const distance = Math.sqrt(distanceSq)
+        const clampedDistance = Math.min(distance, 10)
+        const proximityVolume = 1 - (clampedDistance / 10)
 
         if (this.proximitySound) {
             this.proximitySound.setVolume(proximityVolume * 0.8)
         }
 
-        //  Movimiento directo hacia el robot
-		const direction = new CANNON.Vec3(
-			targetPos.x - enemyPos.x,
-			targetPos.y - enemyPos.y,
-			targetPos.z - enemyPos.z
-		)
-
-		if (direction.length() > 0.5) {
-            direction.normalize()
-            direction.scale(this.speed, direction)
-            this.body.velocity.x = direction.x
-			this.body.velocity.y = direction.y
-            this.body.velocity.z = direction.z
+		if (distance > 0.5) {
+            this._direction.set(dx, this._targetPos.y - enemyPos.y, dz)
+            this._direction.normalize()
+            this._direction.scale(this.speed, this._direction)
+            this.body.velocity.x = this._direction.x
+			this.body.velocity.y = this._direction.y
+            this.body.velocity.z = this._direction.z
         }
 
-        //  Rotar el modelo para mirar al jugador
-        const dx = targetPos.x - enemyPos.x
-        const dz = targetPos.z - enemyPos.z
         const targetAngle = Math.atan2(dx, dz)
         this.model.rotation.y = targetAngle
 
-        //  Sincronizar modelo visual
         this.model.position.copy(this.body.position)
-        this.model.position.y -= 0.5 // Ajuste visual respecto a la esfera física
+        this.model.position.y -= 0.5
 
     }
 

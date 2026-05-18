@@ -10,6 +10,7 @@ export default class ToyCarLoader {
         this.resources = this.experience.resources;
         this.physics = this.experience.physics;
         this.prizes = [];
+        this.portalModels = [];
     }
 
     _applyTextureToMeshes(root, imagePath, matcher, options = {}) {
@@ -175,6 +176,32 @@ export default class ToyCarLoader {
         }
     }
 
+    async _loadMissingModels(names) {
+        const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+        const loader = new GLTFLoader();
+        const total = names.length;
+        let done = 0;
+
+        await Promise.all(names.map(name => new Promise((resolve) => {
+            loader.load(
+                `/models/toycar/${name}.glb`,
+                (gltf) => {
+                    this.resources.items[name] = gltf;
+                    done++;
+                    window.dispatchEvent(new CustomEvent('level-loading-progress', {
+                        detail: Math.floor((done / total) * 100)
+                    }));
+                    resolve();
+                },
+                undefined,
+                () => {
+                    done++;
+                    resolve();
+                }
+            );
+        })));
+    }
+
     async _processBlocks(blocks, precisePhysicsModels) {
         const missingModels = new Set();
         blocks.forEach(block => {
@@ -186,43 +213,34 @@ export default class ToyCarLoader {
         });
 
         if (missingModels.size > 0) {
-            console.log(`⏳ Cargando ${missingModels.size} modelos faltantes dinámicamente...`);
-            const gltfLoader = this.resources.loaders.gltfLoader;
-            
-            const base = import.meta.env.BASE_URL || '/';
-            const publicPath = (p) => `${base.replace(/\/$/, '')}/${p.replace(/^\//, '')}`;
-            
-            const loadPromises = Array.from(missingModels).map(name => {
-                return new Promise((resolve) => {
-                    gltfLoader.load(publicPath(`models/toycar/${name}.glb`), (glb) => {
-                        this.resources.items[name] = glb;
-                        resolve();
-                    }, undefined, (err) => {
-                        console.warn(`⚠️ No se pudo cargar dinámicamente el modelo faltante: ${name}`, err);
-                        resolve();
-                    });
-                });
-            });
-            await Promise.all(loadPromises);
-            console.log(`✅ Carga dinámica completada.`);
+            console.log(`📦 Cargando ${missingModels.size} modelos bajo demanda para este nivel...`);
+            await this._loadMissingModels([...missingModels]);
         }
 
+        const CHUNK_SIZE = 50;
+        for (let i = 0; i < blocks.length; i += CHUNK_SIZE) {
+            const chunk = blocks.slice(i, i + CHUNK_SIZE);
+            this._processChunk(chunk, precisePhysicsModels);
+
+            if (i + CHUNK_SIZE < blocks.length) {
+                await new Promise(resolve => setTimeout(resolve, 10));
+            }
+        }
+    }
+
+    _processChunk(blocks, precisePhysicsModels) {
         blocks.forEach(block => {
             if (!block.name) {
-                console.warn('Bloque sin nombre:', block);
                 return;
             }
 
-            // Ignorar los planos de Blender para evitar doble suelo que bloquea saltos
             if (block.name.toLowerCase().includes('plane')) {
                 return;
             }
 
-            //  Si es un premio (coin) — usar coinModel directamente, sin requerir GLB propio
             if (block.name.startsWith('coin')) {
                 const coinScene = this.resources.items.coinModel?.scene;
                 if (!coinScene) {
-                    console.warn('coinModel no encontrado en resources');
                     return;
                 }
                 const actualModel = coinScene.clone();
@@ -234,9 +252,7 @@ export default class ToyCarLoader {
                     role: block.role || "default"
                 });
 
-                // 🔵 MARCAR modelo del premio
                 prize.model.userData.levelObject = true;
-
                 this.prizes.push(prize);
                 return;
             }
@@ -245,23 +261,18 @@ export default class ToyCarLoader {
             const glb = this.resources.items[resourceKey];
 
             if (!glb) {
-                console.warn(`Modelo no encontrado: ${resourceKey}`);
                 return;
             }
 
             const model = glb.scene.clone();
-
-            //  MARCAR modelo como perteneciente al nivel
             model.userData.levelObject = true;
 
-            // Eliminar cámaras y luces embebidas
             model.traverse((child) => {
                 if (child.isCamera || child.isLight) {
                     child.parent.remove(child);
                 }
             });
 
-            //  Manejo de carteles: aplicar textura a meshes
             this._applyTextureToMeshes(
                 model,
                 '/textures/ima1.jpg',
@@ -269,15 +280,17 @@ export default class ToyCarLoader {
                 { rotation: -Math.PI / 2, center: { x: 0.5, y: 0.5 }, mirrorX: true }
             );
 
-            //  Integración especial para modelos baked
             if (block.name.includes('baked')) {
-                const bakedTexture = new THREE.TextureLoader().load('/textures/baked.jpg');
-                bakedTexture.flipY = false;
-                if ('colorSpace' in bakedTexture) {
-                    bakedTexture.colorSpace = THREE.SRGBColorSpace;
-                } else {
-                    bakedTexture.encoding = THREE.sRGBEncoding;
+                if (!this._bakedTexture) {
+                    this._bakedTexture = new THREE.TextureLoader().load('/textures/baked.jpg');
+                    this._bakedTexture.flipY = false;
+                    if ('colorSpace' in this._bakedTexture) {
+                        this._bakedTexture.colorSpace = THREE.SRGBColorSpace;
+                    } else {
+                        this._bakedTexture.encoding = THREE.sRGBEncoding;
+                    }
                 }
+                const bakedTexture = this._bakedTexture;
 
                 model.traverse(child => {
                     if (child.isMesh) {
@@ -285,9 +298,7 @@ export default class ToyCarLoader {
                         child.material.needsUpdate = true;
 
                         if (child.name.toLowerCase().includes('portal')) {
-                            this.experience.time.on('tick', () => {
-                                child.rotation.y += 0.01;
-                            });
+                            this.portalModels.push(child);
                         }
                     }
                 });
@@ -295,14 +306,12 @@ export default class ToyCarLoader {
 
             this.scene.add(model);
 
-            // Físicas
             let shape;
             let position = new THREE.Vector3();
 
             if (precisePhysicsModels.includes(block.name)) {
                 shape = createTrimeshShapeFromModel(model);
                 if (!shape) {
-                    console.warn(`No se pudo crear Trimesh para ${block.name}`);
                     return;
                 }
                 position.set(0, 0, 0);
@@ -324,12 +333,11 @@ export default class ToyCarLoader {
                 material: this.physics.obstacleMaterial
             });
 
-            // 🔵 MARCAR cuerpo físico
             body.userData = { levelObject: true };
             model.userData.physicsBody = body;
             body.userData.linkedModel = model;
             this.physics.world.addBody(body);
-            
+
             if (this.experience.world && this.experience.world.levelPhysicsObjects) {
                 this.experience.world.levelPhysicsObjects.push(model);
             }
