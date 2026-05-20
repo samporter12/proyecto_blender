@@ -1,11 +1,11 @@
 version: '3.8'
 services:
   postgres:
-    image: postgres:15
+    image: postgres:18
     container_name: game_postgres_db
     environment:
-      POSTGRES_USER: gameuser
-      POSTGRES_PASSWORD: gamepassword
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin
       POSTGRES_DB: gamedb
     ports:
       - "5433:5432"

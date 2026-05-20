@@ -20,6 +20,9 @@ const Game = () => {
     return () => {
       window.removeEventListener('resource-progress', handleProgress)
       window.removeEventListener('resource-complete', handleComplete)
+      if (experience) {
+        experience.destroy();
+      }
     }
   }, [])
 
@@ -38,9 +41,23 @@ const Game = () => {
 
 const App = () => {
   const [token, setToken] = useState(localStorage.getItem('token'))
+  const [isGuest, setIsGuest] = useState(localStorage.getItem('isGuest') === 'true')
 
-  if (!token) {
-    return <Login setToken={setToken} />
+  const handleLogin = (newToken, guest = false) => {
+    if (guest) {
+      localStorage.setItem('isGuest', 'true')
+      setIsGuest(true)
+      setToken('guest_token') // Or we can just use isGuest
+    } else {
+      localStorage.setItem('token', newToken)
+      localStorage.removeItem('isGuest')
+      setIsGuest(false)
+      setToken(newToken)
+    }
+  }
+
+  if (!token && !isGuest) {
+    return <Login setToken={handleLogin} />
   }
 
   return <Game />

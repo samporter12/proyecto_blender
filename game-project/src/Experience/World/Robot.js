@@ -42,7 +42,7 @@ export default class Robot {
             mass: 2,
             shape: shape,
             position: new CANNON.Vec3(0, 1.2, 0),
-            linearDamping: 0.05,
+            linearDamping: 0.1, // 🛡️ Aumentado de 0.05 para mayor estabilidad
             angularDamping: 0.9
         })
 
@@ -119,31 +119,45 @@ export default class Robot {
 
         const keys = this.keyboard.getState()
         const isRunning = keys.shift
-        const moveForce = isRunning ? 250 : 80
-        const turnSpeed = 2.5
+        // Aumentado para mayor velocidad y respuesta
+        const moveForce = isRunning ? 400 : 180
+        const turnSpeed = 3.5
         let isMoving = false
 
-        // Limitar velocidad si es demasiado alta
+        // Fricción artificial en el eje horizontal para evitar salir volando por colisiones
+        // y para detenerse más rápido al soltar las teclas
+        if (this.body.position.y <= 1.0) {
+            this.body.velocity.x *= 0.85
+            this.body.velocity.z *= 0.85
+        }
+
+        // Limitar velocidad horizontal máxima para no descontrolarse
         const maxSpeed = isRunning ? 35 : 15
         this.body.velocity.x = Math.max(Math.min(this.body.velocity.x, maxSpeed), -maxSpeed)
         this.body.velocity.z = Math.max(Math.min(this.body.velocity.z, maxSpeed), -maxSpeed)
-
+        
+        // Limitar fuertemente la velocidad vertical positiva (salvo cuando salta) para evitar salir disparado
+        this.body.velocity.y = Math.max(Math.min(this.body.velocity.y, 8), -20) 
 
         // Salto
         // Dirección hacia adelante, independientemente del salto o movimiento
         const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.group.quaternion)
 
         // Salto (radio de esfera es 0.6, el centro al descansar está en ~0.6)
-        if (keys.space && this.body.position.y <= 0.7) {
-            this.body.applyImpulse(new CANNON.Vec3(forward.x * 0.5, 5, forward.z * 0.5))
+        if (keys.space && this.body.position.y <= 0.8) {
+            // Se asigna la velocidad directamente para un salto más consistente en vez de un impulso
+            this.body.velocity.y = 6
+            this.body.velocity.x += forward.x * 2
+            this.body.velocity.z += forward.z * 2
             this.animation.play('jump')
             return
         }
-        //No permitir que el robot salga del escenario
-        if (this.body.position.y > 10) {
-            console.warn(' Robot fuera del escenario. Reubicando...')
+        // 🛡️ No permitir que el robot salga del escenario (Aumentado a 25 para evitar falsos positivos)
+        if (this.body.position.y > 25 || this.body.position.y < -5) {
+            console.warn('⚠️ Robot fuera del escenario. Reubicando...')
             this.body.position.set(0, 1.2, 0)
             this.body.velocity.set(0, 0, 0)
+            this.body.angularVelocity.set(0, 0, 0)
         }
 
 
@@ -172,12 +186,14 @@ export default class Robot {
         // Rotación
         if (keys.left) {
             this.group.rotation.y += turnSpeed * delta
-            this.body.quaternion.setFromEuler(0, this.group.rotation.y, 0)
         }
         if (keys.right) {
             this.group.rotation.y -= turnSpeed * delta
-            this.body.quaternion.setFromEuler(0, this.group.rotation.y, 0)
         }
+        
+        // 🛡️ Sincronizar el cuerpo físico con la rotación visual de forma segura
+        this.body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), this.group.rotation.y)
+        this.body.angularVelocity.set(0, 0, 0) // Evitar rotaciones locas inducidas por colisiones
 
 
         // Animaciones según movimiento
@@ -214,7 +230,7 @@ export default class Robot {
             const dir2D = mobile.directionVector
             const dir3D = new THREE.Vector3(dir2D.x, 0, dir2D.y).normalize()
 
-            const adjustedSpeed = 250 * mobile.intensity // velocidad más fluida
+            const adjustedSpeed = 400 * mobile.intensity // velocidad más fluida y rápida
             const force = new CANNON.Vec3(dir3D.x * adjustedSpeed, 0, dir3D.z * adjustedSpeed)
 
             this.body.applyForce(force, this.body.position)

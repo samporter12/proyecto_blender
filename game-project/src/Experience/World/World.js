@@ -34,6 +34,7 @@ export default class World {
 
         this.allowPrizePickup = false
         this.hasMoved = false
+        this.levelPhysicsObjects = []
 
         setTimeout(() => {
             this.allowPrizePickup = true
@@ -160,6 +161,8 @@ export default class World {
                             text: '❌ Salir',
                             onClick: () => {
                                 localStorage.removeItem('token')
+                                localStorage.removeItem('isGuest')
+                                localStorage.removeItem('username')
                                 window.location.reload()
                             }
                         }
@@ -190,14 +193,14 @@ export default class World {
         }
 
 
-        const speed = this.robot?.body?.velocity?.length?.() || 0
-        const moved = speed > 0.5
+        const speedSq = this.robot?.body?.velocity?.lengthSquared?.() || 0
+        const moved = speedSq > 0.25
 
         this.loader.prizes.forEach((prize) => {
             if (!prize.pivot) return
 
-            const dist = prize.pivot.position.distanceTo(pos)
-            if (dist < 1.2 && moved && !prize.collected) {
+            const distSq = prize.pivot.position.distanceToSquared(pos)
+            if (distSq < 1.44 && moved && !prize.collected) {
                 prize.collect()
                 prize.collected = true
 
@@ -306,19 +309,21 @@ export default class World {
             ? this.experience.camera.instance.position
             : this.robot?.body?.position
 
-        this.scene.traverse((obj) => {
-            if (obj.userData?.levelObject && obj.userData.physicsBody) {
-                const dist = obj.position.distanceTo(playerPos)
-                const shouldEnable = dist < 40 && obj.visible
+        if (playerPos && this.levelPhysicsObjects) {
+            for (const obj of this.levelPhysicsObjects) {
+                if (obj.visible) {
+                    const distSq = obj.position.distanceToSquared(playerPos)
+                    const shouldEnable = distSq < 1600 // 40 * 40
 
-                const body = obj.userData.physicsBody
-                if (shouldEnable && !body.enabled) {
-                    body.enabled = true
-                } else if (!shouldEnable && body.enabled) {
-                    body.enabled = false
+                    const body = obj.userData.physicsBody
+                    if (shouldEnable && !body.enabled) {
+                        body.enabled = true
+                    } else if (!shouldEnable && body.enabled) {
+                        body.enabled = false
+                    }
                 }
             }
-        })
+        }
     }
 
 
@@ -349,8 +354,14 @@ export default class World {
                     return `${base.replace(/\/$/, '')}/${p.replace(/^\//, '')}`;
                 };
 
-                const localUrl = publicPath('data/toy_car_blocks.json');
-                const localRes = await fetch(localUrl);
+                let localUrl = publicPath(`models/toycar/toy_car_blocks${level}.json`);
+                let localRes = await fetch(localUrl);
+                
+                if (!localRes.ok) {
+                    localUrl = publicPath('data/toy_car_blocks.json');
+                    localRes = await fetch(localUrl);
+                }
+
                 if (!localRes.ok) {
                     const preview = (await localRes.text()).slice(0, 120);
                     throw new Error(`No se pudo cargar ${localUrl} (HTTP ${localRes.status}). Vista previa: ${preview}`);
@@ -362,11 +373,13 @@ export default class World {
                 }
                 const allBlocks = await localRes.json();
 
-                const filteredBlocks = allBlocks.filter(b => b.level === level);
+                // if we loaded the specific level file, we just use it directly, 
+                // but if we loaded the combined one, we filter by level.
+                const filteredBlocks = localUrl.includes(`toy_car_blocks${level}.json`) ? allBlocks : allBlocks.filter(b => b.level === level);
 
                 data = {
                     blocks: filteredBlocks,
-                    spawnPoint: { x: -17, y: 1.5, z: -67 } // valor por defecto si no viene en JSON
+                    spawnPoint: { x: 5, y: 1.5, z: 5 }
                 };
             }
 
@@ -393,7 +406,7 @@ export default class World {
                     throw new Error(`Contenido no JSON en ${preciseUrl}. Vista previa: ${preview}`);
                 }
                 const preciseModels = await preciseRes.json();
-                this.loader._processBlocks(data.blocks, preciseModels);
+                await this.loader._processBlocks(data.blocks, preciseModels);
             } else {
                 await this.loader.loadFromURL(apiUrl);
             }
@@ -408,7 +421,7 @@ export default class World {
             console.log(`🎯 Total de monedas default para el nivel ${level}: ${this.totalDefaultCoins}`);
 
             this.resetRobotPosition(spawnPoint);
-            
+
             const enemiesCountEnv = parseInt(import.meta.env.VITE_ENEMIES_COUNT || '3', 10);
             const enemiesCount = Number.isFinite(enemiesCountEnv) && enemiesCountEnv > 0 ? enemiesCountEnv : 3;
             this.spawnEnemies(enemiesCount);
@@ -436,15 +449,24 @@ export default class World {
             }
         });
 
+        this.levelPhysicsObjects = [];
+
         childrenToRemove.forEach((child) => {
-            if (child.geometry) child.geometry.dispose();
-            if (child.material) {
-                if (Array.isArray(child.material)) {
-                    child.material.forEach(mat => mat.dispose());
-                } else {
-                    child.material.dispose();
+            // 🛡️ Liberación profunda de memoria
+            child.traverse((obj) => {
+                if (obj.geometry) obj.geometry.dispose();
+                if (obj.material) {
+                    if (Array.isArray(obj.material)) {
+                        obj.material.forEach(mat => {
+                            if (mat.map) mat.map.dispose();
+                            mat.dispose();
+                        });
+                    } else {
+                        if (obj.material.map) obj.material.map.dispose();
+                        obj.material.dispose();
+                    }
                 }
-            }
+            });
 
             this.scene.remove(child);
 
@@ -537,7 +559,7 @@ export default class World {
 
     }
 
-    resetRobotPosition(spawn = { x: -17, y: 1.5, z: -67 }) {
+    resetRobotPosition(spawn = { x: 5, y: 1.5, z: 5 }) {
         if (!this.robot) return
         this.robot.respawn(new THREE.Vector3(spawn.x, spawn.y, spawn.z))
     }
@@ -545,7 +567,7 @@ export default class World {
     async _processLocalBlocks(blocks) {
         const preciseRes = await fetch('/config/precisePhysicsModels.json');
         const preciseModels = await preciseRes.json();
-        this.loader._processBlocks(blocks, preciseModels);
+        await this.loader._processBlocks(blocks, preciseModels);
 
         this.loader.prizes.forEach(p => {
             if (p.model) p.model.visible = (p.role !== 'finalPrize');

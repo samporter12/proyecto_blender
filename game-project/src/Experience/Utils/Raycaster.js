@@ -17,6 +17,15 @@ export default class Raycaster {
         this.sharedGeometry = new THREE.BoxGeometry(0.5, 0.5, 0.5)
 
         this.setEvents()
+
+        this.experience.time.on('tick', () => {
+            for (const obstacle of this.spawnedObstacles) {
+                if (obstacle.mesh && obstacle.body) {
+                    obstacle.mesh.position.copy(obstacle.body.position)
+                    obstacle.mesh.quaternion.copy(obstacle.body.quaternion)
+                }
+            }
+        })
     }
 
     setEvents() {
@@ -71,13 +80,7 @@ export default class Raycaster {
         })
         this.physics.world.addBody(body)
       
-        const tick = () => {
-          mesh.position.copy(body.position)
-          mesh.quaternion.copy(body.quaternion)
-        }
-        this.experience.time.on('tick', tick)
-      
-        const obstacle = { mesh, body, tick }
+        const obstacle = { mesh, body }
         this.spawnedObstacles.push(obstacle)
       
         return obstacle
@@ -102,13 +105,7 @@ export default class Raycaster {
         })
         this.physics.world.addBody(body)
 
-        const tick = () => {
-            mesh.position.copy(body.position)
-            mesh.quaternion.copy(body.quaternion)
-        }
-        this.experience.time.on('tick', tick)
-
-        this.spawnedObstacles.push({ mesh, body, tick })
+        this.spawnedObstacles.push({ mesh, body })
 
         // Limitar máximo
         const MAX_OBSTACLES = 100
@@ -116,13 +113,18 @@ export default class Raycaster {
             this._removeObstacle(this.spawnedObstacles.shift())
         }
     }
-    _removeObstacle({ mesh, body, tick }) {
+    _removeObstacle(obstacle) {
+        if (!obstacle) return;
+        const { mesh, body } = obstacle;
         if (!mesh || !body) return;
     
+        // Remove from tracking array immediately to stop physics updates
+        const index = this.spawnedObstacles.indexOf(obstacle);
+        if (index > -1) {
+            this.spawnedObstacles.splice(index, 1);
+        }
+
         mesh.material.transparent = true
-    
-        // Bloquear tick inmediatamente
-        this.experience.time.off('tick', tick)
     
         // Animación
         gsap.to(mesh.scale, {

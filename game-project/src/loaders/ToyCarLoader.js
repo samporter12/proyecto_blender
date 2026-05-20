@@ -22,8 +22,30 @@ export default class ToyCarLoader {
         });
 
         if (matchedMeshes.length === 0) {
-            // Evitar ruido en consola si no hay objetivos en este modelo
-            // console.debug(`Sin meshes objetivo para ${imagePath} en este modelo.`)
+            return;
+        }
+
+        // 🛡️ Caché de texturas para evitar duplicar 6GB de RAM
+        if (!this.textureCache) this.textureCache = {};
+        const cacheKey = `${imagePath}_${JSON.stringify(options)}`;
+        
+        if (this.textureCache[cacheKey]) {
+            const texture = this.textureCache[cacheKey];
+            let applied = 0;
+            matchedMeshes.forEach((child) => {
+                if (Array.isArray(child.material)) {
+                    child.material.forEach((mat) => {
+                        mat.map = texture;
+                        mat.needsUpdate = true;
+                    });
+                } else if (child.material) {
+                    child.material.map = texture;
+                    child.material.needsUpdate = true;
+                } else {
+                    child.material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
+                }
+                applied++;
+            });
             return;
         }
 
@@ -31,6 +53,7 @@ export default class ToyCarLoader {
         textureLoader.load(
             imagePath,
             (texture) => {
+                this.textureCache[cacheKey] = texture; // Guardar en caché
                 if ('colorSpace' in texture) {
                     texture.colorSpace = THREE.SRGBColorSpace;
                 } else {
@@ -129,7 +152,7 @@ export default class ToyCarLoader {
 
             }
 
-            this._processBlocks(blocks, precisePhysicsModels);
+            await this._processBlocks(blocks, precisePhysicsModels);
         } catch (err) {
             console.error('Error al cargar bloques o lista Trimesh:', err);
         }
@@ -146,13 +169,44 @@ export default class ToyCarLoader {
             const blocks = await res.json();
             console.log(`📦 Bloques cargados (${blocks.length}) desde ${apiUrl}`);
 
-            this._processBlocks(blocks, precisePhysicsModels);
+            await this._processBlocks(blocks, precisePhysicsModels);
         } catch (err) {
             console.error('Error al cargar bloques desde URL:', err);
         }
     }
 
-    _processBlocks(blocks, precisePhysicsModels) {
+    async _processBlocks(blocks, precisePhysicsModels) {
+        const missingModels = new Set();
+        blocks.forEach(block => {
+            if (block.name && !block.name.startsWith('coin') && !block.name.toLowerCase().includes('plane')) {
+                if (!this.resources.items[block.name]) {
+                    missingModels.add(block.name);
+                }
+            }
+        });
+
+        if (missingModels.size > 0) {
+            console.log(`⏳ Cargando ${missingModels.size} modelos faltantes dinámicamente...`);
+            const gltfLoader = this.resources.loaders.gltfLoader;
+            
+            const base = import.meta.env.BASE_URL || '/';
+            const publicPath = (p) => `${base.replace(/\/$/, '')}/${p.replace(/^\//, '')}`;
+            
+            const loadPromises = Array.from(missingModels).map(name => {
+                return new Promise((resolve) => {
+                    gltfLoader.load(publicPath(`models/toycar/${name}.glb`), (glb) => {
+                        this.resources.items[name] = glb;
+                        resolve();
+                    }, undefined, (err) => {
+                        console.warn(`⚠️ No se pudo cargar dinámicamente el modelo faltante: ${name}`, err);
+                        resolve();
+                    });
+                });
+            });
+            await Promise.all(loadPromises);
+            console.log(`✅ Carga dinámica completada.`);
+        }
+
         blocks.forEach(block => {
             if (!block.name) {
                 console.warn('Bloque sin nombre:', block);
@@ -161,6 +215,29 @@ export default class ToyCarLoader {
 
             // Ignorar los planos de Blender para evitar doble suelo que bloquea saltos
             if (block.name.toLowerCase().includes('plane')) {
+                return;
+            }
+
+            //  Si es un premio (coin) — usar coinModel directamente, sin requerir GLB propio
+            if (block.name.startsWith('coin')) {
+                const coinScene = this.resources.items.coinModel?.scene;
+                if (!coinScene) {
+                    console.warn('coinModel no encontrado en resources');
+                    return;
+                }
+                const actualModel = coinScene.clone();
+
+                const prize = new Prize({
+                    model: actualModel,
+                    position: new THREE.Vector3(block.x, block.y, block.z),
+                    scene: this.scene,
+                    role: block.role || "default"
+                });
+
+                // 🔵 MARCAR modelo del premio
+                prize.model.userData.levelObject = true;
+
+                this.prizes.push(prize);
                 return;
             }
 
@@ -216,26 +293,6 @@ export default class ToyCarLoader {
                 });
             }
 
-            //  Si es un premio (coin)
-            if (block.name.startsWith('coin')) {
-                const coinScene = this.resources.items.coinModel?.scene
-                const actualModel = coinScene ? coinScene.clone() : model
-                
-                const prize = new Prize({
-                    model: actualModel,
-                    position: new THREE.Vector3(block.x, block.y, block.z),
-                    scene: this.scene,
-                    role: block.role || "default"
-                });
-
-                // 🔵 MARCAR modelo del premio
-                prize.model.userData.levelObject = true;
-
-                this.prizes.push(prize);
-                //this.scene.add(prize.model);
-                return;
-            }
-
             this.scene.add(model);
 
             // Físicas
@@ -272,6 +329,10 @@ export default class ToyCarLoader {
             model.userData.physicsBody = body;
             body.userData.linkedModel = model;
             this.physics.world.addBody(body);
+            
+            if (this.experience.world && this.experience.world.levelPhysicsObjects) {
+                this.experience.world.levelPhysicsObjects.push(model);
+            }
         });
     }
 

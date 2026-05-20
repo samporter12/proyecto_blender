@@ -151,7 +151,7 @@ export default class Experience {
   }
 
   //Control de audio
-  handleFirstInteraction() {
+  handleFirstInteraction = () => {
     const ctx = Howler.ctx
     if (ctx && ctx.state === 'suspended') {
       ctx.resume().then(() => {
@@ -300,6 +300,11 @@ export default class Experience {
     this.camera.controls.dispose()
     this.renderer.instance.dispose()
     if (this.debug.active) this.debug.ui.destroy()
+    
+    window.removeEventListener('click', this.handleFirstInteraction)
+    window.removeEventListener('touchstart', this.handleFirstInteraction)
+    
+    instance = null;
   }
 
   startGame() {
