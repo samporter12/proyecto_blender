@@ -40,7 +40,12 @@ export default [
         name: 'coinModel',
         type: 'gltfModel',
         path: '/models/Coin.glb'
-    },
+    }
+]
+
+// Level models are loaded on-demand per level by ToyCarLoader._loadMissingModels()
+// Sources map used for resolving paths when loading dynamically
+export const levelModelSources = [
     {
         "name": "baked_lev1",
         "type": "gltfModel",

@@ -23,17 +23,28 @@ export default class Physics {
         this.robotMaterial = new CANNON.Material('robot')
         this.obstacleMaterial = new CANNON.Material('obstacle')
         this.wallMaterial = new CANNON.Material('wall')
+        this.floorMaterial = new CANNON.Material('floor')
+
+        const robotFloorContact = new CANNON.ContactMaterial(
+            this.robotMaterial,
+            this.floorMaterial,
+            {
+                friction: 0.0,
+                restitution: 0.0,
+                contactEquationStiffness: 1e6,
+                contactEquationRelaxation: 10,
+            }
+        )
+        this.world.addContactMaterial(robotFloorContact)
 
         const robotObstacleContact = new CANNON.ContactMaterial(
             this.robotMaterial,
             this.obstacleMaterial,
             {
-                friction: 0.6,
+                friction: 0.0,
                 restitution: 0.0,
-                contactEquationStiffness: 1e6, // 🛡️ Aún más bajo para máxima estabilidad
-                contactEquationRelaxation: 5, // 🛡️ Más suave
-                frictionEquationStiffness: 1e6,
-                frictionEquationRelaxation: 3
+                contactEquationStiffness: 1e6,
+                contactEquationRelaxation: 10,
             }
         )
         this.world.addContactMaterial(robotObstacleContact)
@@ -42,21 +53,17 @@ export default class Physics {
             this.robotMaterial,
             this.wallMaterial,
             {
-                friction: 0.6,
+                friction: 0.0,
                 restitution: 0.0,
                 contactEquationStiffness: 1e6,
-                contactEquationRelaxation: 6, // 🛡️ Máxima amortiguación en bordes
-                frictionEquationStiffness: 1e6,
-                frictionEquationRelaxation: 3
+                contactEquationRelaxation: 10,
             }
         )
         this.world.addContactMaterial(robotWallContact)
     }
 
     update(delta) {
-        // ✅ Intenta avanzar la simulación sin romper
         try {
-            // 🛡️ Reducido de 10 a 4 sub-pasos para mejor rendimiento con muchos bloques estáticos
             const maxSubSteps = (delta < 1 / 30) ? 4 : 8;
             this.world.step(1 / 60, delta, maxSubSteps)
         } catch (err) {

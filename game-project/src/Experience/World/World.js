@@ -22,6 +22,8 @@ export default class World {
         this.resources = this.experience.resources
         this.levelManager = new LevelManager(this.experience);
         this.finalPrizeActivated = false
+        this.defeatTriggered = false
+        this.winTriggered = false
         this.gameStarted = false
         this.enemies = []
         this.distanceCheckFrame = 0
@@ -83,23 +85,28 @@ export default class World {
 
     // Crear varios enemigos en posiciones alejadas del jugador para evitar atascos iniciales
     spawnEnemies(count = 3) {
-        if (!this.robot?.body?.position) return
-        const playerPos = this.robot.body.position
-        const minRadius = 25
-        const maxRadius = 40
-
-        // Limpia anteriores si existen
         if (this.enemies?.length) {
             this.enemies.forEach(e => e?.destroy?.())
             this.enemies = []
         }
+        if (this._enemySpawnTimer) {
+            clearTimeout(this._enemySpawnTimer)
+            this._enemySpawnTimer = null
+        }
 
-        for (let i = 0; i < count; i++) {
+        const level = this.levelManager?.currentLevel || 1
+        const firstDelay = Math.max(2000, 5000 - (level - 1) * 750)
+        const betweenDelay = Math.max(3000, 8000 - (level - 1) * 1250)
+
+        const spawnOne = (i) => {
+            if (i >= count) return
+            const playerPos = this.robot?.body?.position
+            if (!playerPos) return
+
             const angle = Math.random() * Math.PI * 2
-            const radius = minRadius + Math.random() * (maxRadius - minRadius)
+            const radius = 5 + Math.random() * 5
             const x = playerPos.x + Math.cos(angle) * radius
             const z = playerPos.z + Math.sin(angle) * radius
-            const y = 1.5
 
             const enemy = new Enemy({
                 scene: this.scene,
@@ -107,14 +114,16 @@ export default class World {
                 playerRef: this.robot,
                 model: this.enemyTemplate,
                 animations: this.enemyAnimations,
-                position: new THREE.Vector3(x, y, z),
+                position: new THREE.Vector3(x, 1.5, z),
                 experience: this.experience
             })
-
-            // Pequeño delay para que no ataquen todos a la vez
-            enemy.delayActivation = 1.0 + i * 0.5
+            enemy.delayActivation = 2.0
             this.enemies.push(enemy)
+
+            this._enemySpawnTimer = setTimeout(() => spawnOne(i + 1), betweenDelay)
         }
+
+        this._enemySpawnTimer = setTimeout(() => spawnOne(0), firstDelay)
     }
 
     toggleAudio() {
@@ -202,31 +211,34 @@ export default class World {
             if (distSq < 1.44 && moved && !prize.collected) {
                 prize.collect()
                 prize.collected = true
+                this.robot.points++
 
-                // Al recoger cualquier moneda, avanzamos de nivel
-                if (this.levelManager.currentLevel < this.levelManager.totalLevels) {
-                    this.levelManager.nextLevel()
-                    this.points = 0
-                    this.robot.points = 0
-                } else {
-                    const elapsed = this.experience.tracker.stop()
-                    this.experience.tracker.saveTime(elapsed)
-                    this.experience.tracker.showEndGameModal(elapsed)
+                if (window.userInteracted) this.coinSound.play()
 
-                    this.experience.obstacleWavesDisabled = true
-                    clearTimeout(this.experience.obstacleWaveTimeout)
-                    this.experience.raycaster?.removeAllObstacles()
+                const required = this.levelManager.getCurrentLevelTargetPoints()
+                this.experience.menu.setStatus?.(`🪙 ${this.robot.points}/${required}`)
 
-                    if (window.userInteracted) {
-                        this.winner.play()
+                if (!this.winTriggered && this.robot.points >= required) {
+                    if (this.levelManager.currentLevel < this.levelManager.totalLevels) {
+                        this.levelManager.nextLevel()
+                        this.points = 0
+                        this.robot.points = 0
+                    } else {
+                        this.winTriggered = true
+                        this.gameStarted = false
+                        this.enemies?.forEach(e => { try { e.body?.velocity?.setZero?.() } catch(_){} })
+                        console.log('🏁 Nivel 5 completado — mostrando fin de juego')
+                        const elapsed = this.experience.tracker?.stop?.() ?? 0
+                        this.experience.tracker?.saveTime?.(elapsed)
+                        this.experience.tracker?.showEndGameModal?.(elapsed)
+
+                        this.experience.obstacleWavesDisabled = true
+                        clearTimeout(this.experience.obstacleWaveTimeout)
+                        this.experience.raycaster?.removeAllObstacles?.()
+
+                        if (window.userInteracted) this.winner.play()
                     }
                 }
-
-                if (window.userInteracted) {
-                    this.coinSound.play()
-                }
-
-                this.experience.menu.setStatus?.(`🎖️ Nivel: ${this.levelManager.currentLevel}`)
             }
         })
 
@@ -382,14 +394,17 @@ export default class World {
 
                 data = {
                     blocks: filteredBlocks,
-                    spawnPoint: { x: 5, y: 1.5, z: 5 }
                 };
             }
 
-            const spawnPoint = data.spawnPoint || { x: 5, y: 1.5, z: 5 };
+            const spawnPoint = this.levelManager.spawnPoints?.[level] || { x: 0, y: 1.5, z: 0 };
             this.points = 0;
             this.robot.points = 0;
             this.finalPrizeActivated = false;
+            this.defeatTriggered = false;
+            this.winTriggered = false;
+            this.allowPrizePickup = false;
+            setTimeout(() => { this.allowPrizePickup = true; }, 2000);
             this.experience.menu.setStatus?.(`🎖️ Puntos: ${this.points}`);
 
             if (data.blocks) {
@@ -441,6 +456,11 @@ export default class World {
             return;
         }
 
+        // Liberar modelos GLB del nivel anterior de resources.items para recuperar RAM
+        if (this.loader) {
+            this.loader.disposeLevelModels();
+        }
+
         let visualObjectsRemoved = 0;
         let physicsBodiesRemoved = 0;
 
@@ -489,6 +509,11 @@ export default class World {
         });
 
         console.log(`🧹 Escena limpiada: ${visualObjectsRemoved} objetos 3D, ${physicsBodiesRemoved} cuerpos físicos eliminados. Restantes en world: ${this.experience.physics.world.bodies.length}`);
+
+        if (this._enemySpawnTimer) {
+            clearTimeout(this._enemySpawnTimer)
+            this._enemySpawnTimer = null
+        }
 
         if (this.enemies?.length) {
             this.enemies.forEach(e => e?.destroy?.());

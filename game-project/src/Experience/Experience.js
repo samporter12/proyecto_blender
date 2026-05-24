@@ -360,9 +360,17 @@ export default class Experience {
 
 
   resetGameToFirstLevel() {
-    console.log('♻️ Reiniciando al nivel');
+    this.modal.hide()
+    console.log('♻️ Reiniciando al nivel 1')
 
-    // 💀 Destruir enemigo previo si existe
+    // Pausar juego durante el reset
+    this.world.gameStarted = false
+    this.world.defeatTriggered = false
+    this.world.winTriggered = false
+    this.world.finalPrizeActivated = false
+    this.world.allowPrizePickup = false
+
+    // Destruir enemigos
     if (Array.isArray(this.world.enemies)) {
       this.world.enemies.forEach(e => e?.destroy?.())
       this.world.enemies = []
@@ -371,25 +379,30 @@ export default class Experience {
       this.world.enemy = null
     }
 
+    // Revivir robot si estaba muerto
+    const spawn1 = this.world.levelManager.spawnPoints?.[1] || { x: 0, y: 1.5, z: 0 }
+    this.world.robot?.respawn?.(spawn1)
+
     // Resetear variables de World
-    this.world.points = 0;
-    this.world.robot.points = 0;
-    this.world.loader.prizes = [];
-    this.world.defeatTriggered = false
+    this.world.points = 0
+    this.world.robot.points = 0
+    this.world.levelManager.currentLevel = 1
 
-    // Limpiar la escena
-    this.world.clearCurrentScene();
+    // Limpiar escena y cargar nivel 1 (clearCurrentScene limpia las monedas)
+    this.world.clearCurrentScene()
+    this.world.loadLevel(1).then(() => {
+      this.world.gameStarted = true
+      setTimeout(() => {
+        this.world.allowPrizePickup = true
+      }, 1000)
+    })
 
-    // Cargar el nivel actual de nuevo
-    const currentLevel = this.world.levelManager.currentLevel;
-    this.world.loadLevel(currentLevel);
+    // Reiniciar tracker
+    this.tracker.destroy()
+    this.tracker = new GameTracker({ modal: this.modal, menu: this.menu })
+    this.tracker.start()
 
-    // Reiniciar el seguimiento de tiempo
-    this.tracker.destroy(); // Detener el loop anterior
-    this.tracker = new GameTracker({ modal: this.modal, menu: this.menu });
-    this.tracker.start();
-
-    console.log(`✅ Juego reiniciado en nivel ${currentLevel}.`);
+    console.log('✅ Juego reiniciado en nivel 1.')
   }
 
 

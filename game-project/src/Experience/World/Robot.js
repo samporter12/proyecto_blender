@@ -12,6 +12,7 @@ export default class Robot {
         this.keyboard = this.experience.keyboard
         this.debug = this.experience.debug
         this.points = 0
+        this.isDead = false
 
         this.setModel()
         this.setSounds()
@@ -21,8 +22,8 @@ export default class Robot {
 
     setModel() {
         this.model = this.resources.items.robotModel.scene
-        this.model.scale.set(0.6, 0.6, 0.6)
-        this.model.position.set(0, -0.6, 0) // Centrar respecto al cuerpo físico
+        this.model.scale.set(0.3, 0.3, 0.3)
+        this.model.position.set(0, -0.1, 0)
 
         this.group = new THREE.Group()
         this.group.add(this.model)
@@ -36,34 +37,24 @@ export default class Robot {
     }
 
     setPhysics() {
-        const shape = new CANNON.Sphere(0.6)
+        const shape = new CANNON.Sphere(0.4)
 
         this.body = new CANNON.Body({
-            mass: 2,
+            mass: 1,
             shape: shape,
             position: new CANNON.Vec3(0, 1.2, 0),
-            linearDamping: 0.1, // 🛡️ Aumentado de 0.05 para mayor estabilidad
-            angularDamping: 0.9
+            linearDamping: 0.0,
+            angularDamping: 1.0
         })
 
         this.body.angularFactor.set(0, 1, 0)
-
-        // Estabilización inicial
+        this.body.allowSleep = false
         this.body.velocity.setZero()
         this.body.angularVelocity.setZero()
-        this.body.sleep()
         this.body.material = this.physics.robotMaterial
-        //console.log(' Robot material:', this.body.material.name)
-
 
         this.physics.world.addBody(this.body)
-        //console.log(' Posición inicial del robot:', this.body.position)
-        // Activar cuerpo después de que el mundo haya dado al menos un paso de simulación
-        setTimeout(() => {
-            this.body.wakeUp()
-        }, 100) // 100 ms ≈ 6 pasos de simulación si step = 1/60
     }
-
 
     setSounds() {
         this.walkSound = new Sound('/sounds/robot/walking.mp3', { loop: true, volume: 0.5 })
@@ -74,22 +65,29 @@ export default class Robot {
         this.animation = {}
         this.animation.mixer = new THREE.AnimationMixer(this.model)
 
+        const clips = this.resources.items.robotModel.animations
+        console.log('Animaciones disponibles:', clips.map((c, i) => `[${i}] ${c.name}`))
+
+        const findClip = (...names) => {
+            for (const name of names) {
+                const clip = clips.find(c => c.name.toLowerCase().includes(name.toLowerCase()))
+                if (clip) return clip
+            }
+            return clips[0]
+        }
+
         this.animation.actions = {}
-        this.animation.actions.dance = this.animation.mixer.clipAction(this.resources.items.robotModel.animations[0])
-        this.animation.actions.death = this.animation.mixer.clipAction(this.resources.items.robotModel.animations[1])
-        this.animation.actions.idle = this.animation.mixer.clipAction(this.resources.items.robotModel.animations[2])
-        this.animation.actions.jump = this.animation.mixer.clipAction(this.resources.items.robotModel.animations[3])
-        this.animation.actions.walking = this.animation.mixer.clipAction(this.resources.items.robotModel.animations[10])
-        this.animation.actions.running = this.animation.mixer.clipAction(this.resources.items.robotModel.animations[16])
+        this.animation.actions.dance   = this.animation.mixer.clipAction(findClip('dance', 'Dance'))
+        this.animation.actions.death   = this.animation.mixer.clipAction(findClip('death', 'Death', 'die'))
+        this.animation.actions.idle    = this.animation.mixer.clipAction(findClip('idle', 'Idle', 'stand'))
+        this.animation.actions.jump    = this.animation.mixer.clipAction(findClip('jump', 'Jump'))
+        this.animation.actions.walking = this.animation.mixer.clipAction(findClip('walk', 'Walk', 'run', 'Run'))
 
         this.animation.actions.current = this.animation.actions.idle
         this.animation.actions.current.play()
 
         this.animation.actions.jump.setLoop(THREE.LoopOnce)
         this.animation.actions.jump.clampWhenFinished = true
-        this.animation.actions.jump.onFinished = () => {
-            this.animation.play('idle')
-        }
 
         this.animation.play = (name) => {
             const newAction = this.animation.actions[name]
@@ -100,7 +98,7 @@ export default class Robot {
             newAction.crossFadeFrom(oldAction, 0.3)
             this.animation.actions.current = newAction
 
-            if (name === 'walking' || name === 'running') {
+            if (name === 'walking') {
                 this.walkSound.play()
             } else {
                 this.walkSound.stop()
@@ -113,99 +111,63 @@ export default class Robot {
     }
 
     update() {
-        if (this.animation.actions.current === this.animation.actions.death) return
+        if (this.isDead) return
         const delta = this.time.delta * 0.001
         this.animation.mixer.update(delta)
 
         const keys = this.keyboard.getState()
-        const isRunning = keys.shift
-        // Aumentado para mayor velocidad y respuesta
-        const moveForce = isRunning ? 400 : 180
-        const turnSpeed = 3.5
+        const isSprinting = keys.shift
+
+        const moveSpeed = isSprinting ? 12 : 6
+        const turnSpeed = 2.0
         let isMoving = false
 
-        // Fricción artificial en el eje horizontal para evitar salir volando por colisiones
-        // y para detenerse más rápido al soltar las teclas
-        if (this.body.position.y <= 1.0) {
-            this.body.velocity.x *= 0.85
-            this.body.velocity.z *= 0.85
-        }
-
-        // Limitar velocidad horizontal máxima para no descontrolarse
-        const maxSpeed = isRunning ? 35 : 15
-        this.body.velocity.x = Math.max(Math.min(this.body.velocity.x, maxSpeed), -maxSpeed)
-        this.body.velocity.z = Math.max(Math.min(this.body.velocity.z, maxSpeed), -maxSpeed)
-        
-        // Limitar fuertemente la velocidad vertical positiva (salvo cuando salta) para evitar salir disparado
-        this.body.velocity.y = Math.max(Math.min(this.body.velocity.y, 8), -20) 
-
-        // Salto
-        // Dirección hacia adelante, independientemente del salto o movimiento
         const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.group.quaternion)
 
-        // Salto (radio de esfera es 0.6, el centro al descansar está en ~0.6)
-        if (keys.space && this.body.position.y <= 0.8) {
-            // Se asigna la velocidad directamente para un salto más consistente en vez de un impulso
-            this.body.velocity.y = 6
-            this.body.velocity.x += forward.x * 2
-            this.body.velocity.z += forward.z * 2
+        if (!keys.space) {
+            this.body.velocity.y = Math.min(this.body.velocity.y, 1.0)
+        }
+
+        const isGrounded = Math.abs(this.body.velocity.y) < 0.5
+        if (keys.space && isGrounded) {
+            this.body.velocity.y = 5
             this.animation.play('jump')
             return
         }
-        // 🛡️ No permitir que el robot salga del escenario (Aumentado a 25 para evitar falsos positivos)
-        if (this.body.position.y > 25 || this.body.position.y < -5) {
-            console.warn('⚠️ Robot fuera del escenario. Reubicando...')
-            this.body.position.set(0, 1.2, 0)
+
+        if (this.body.position.y < -10) {
+            const spawn = this.experience.world?.levelManager?.spawnPoints?.[
+                this.experience.world?.levelManager?.currentLevel
+            ] || { x: 0, y: 1.5, z: 0 }
+            this.body.position.set(spawn.x, spawn.y, spawn.z)
             this.body.velocity.set(0, 0, 0)
-            this.body.angularVelocity.set(0, 0, 0)
         }
 
-
-        // Movimiento hacia adelante
         if (keys.up) {
-            const forward = new THREE.Vector3(0, 0, 1)
-            forward.applyQuaternion(this.group.quaternion)
-            this.body.applyForce(
-                new CANNON.Vec3(forward.x * moveForce, 0, forward.z * moveForce),
-                this.body.position
-            )
+            this.body.velocity.x = forward.x * moveSpeed
+            this.body.velocity.z = forward.z * moveSpeed
             isMoving = true
+        } else if (keys.down) {
+            this.body.velocity.x = -forward.x * moveSpeed
+            this.body.velocity.z = -forward.z * moveSpeed
+            isMoving = true
+        } else {
+            this.body.velocity.x = 0
+            this.body.velocity.z = 0
         }
 
-        // Movimiento hacia atrás
-        if (keys.down) {
-            const backward = new THREE.Vector3(0, 0, -1)
-            backward.applyQuaternion(this.group.quaternion)
-            this.body.applyForce(
-                new CANNON.Vec3(backward.x * moveForce, 0, backward.z * moveForce),
-                this.body.position
-            )
-            isMoving = true
-        }
-
-        // Rotación
         if (keys.left) {
             this.group.rotation.y += turnSpeed * delta
+            this.body.quaternion.setFromEuler(0, this.group.rotation.y, 0)
         }
         if (keys.right) {
             this.group.rotation.y -= turnSpeed * delta
+            this.body.quaternion.setFromEuler(0, this.group.rotation.y, 0)
         }
-        
-        // 🛡️ Sincronizar el cuerpo físico con la rotación visual de forma segura
-        this.body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), this.group.rotation.y)
-        this.body.angularVelocity.set(0, 0, 0) // Evitar rotaciones locas inducidas por colisiones
 
-
-        // Animaciones según movimiento
         if (isMoving) {
-            if (isRunning) {
-                if (this.animation.actions.current !== this.animation.actions.running) {
-                    this.animation.play('running')
-                }
-            } else {
-                if (this.animation.actions.current !== this.animation.actions.walking) {
-                    this.animation.play('walking')
-                }
+            if (this.animation.actions.current !== this.animation.actions.walking) {
+                this.animation.play('walking')
             }
         } else {
             if (this.animation.actions.current !== this.animation.actions.idle) {
@@ -213,79 +175,100 @@ export default class Robot {
             }
         }
 
-        // Sincronización física → visual
         this.group.position.copy(this.body.position)
 
+        const fox = this.experience.world?.fox
+        if (fox?.model) {
+            const target = this.group.position
+            const foxPos = fox.model.position
+
+            const behind = new THREE.Vector3(
+                target.x - Math.sin(this.group.rotation.y) * 3,
+                target.y,
+                target.z - Math.cos(this.group.rotation.y) * 3
+            )
+
+            foxPos.x += (behind.x - foxPos.x) * 0.05
+            foxPos.z += (behind.z - foxPos.z) * 0.05
+            foxPos.y  = target.y
+
+            const dx = target.x - foxPos.x
+            const dz = target.z - foxPos.z
+            if (Math.abs(dx) > 0.01 || Math.abs(dz) > 0.01) {
+                fox.model.rotation.y = Math.atan2(dx, dz)
+            }
+        }
     }
 
-    // Método para mover el robot desde el exterior VR
     moveInDirection(dir, speed) {
-        if (!window.userInteracted || !this.experience.renderer.instance.xr.isPresenting) {
-            return
-        }
+        if (!window.userInteracted || !this.experience.renderer.instance.xr.isPresenting) return
 
-        // Si hay controles móviles activos
         const mobile = window.experience?.mobileControls
         if (mobile?.intensity > 0) {
             const dir2D = mobile.directionVector
             const dir3D = new THREE.Vector3(dir2D.x, 0, dir2D.y).normalize()
-
-            const adjustedSpeed = 400 * mobile.intensity // velocidad más fluida y rápida
-            const force = new CANNON.Vec3(dir3D.x * adjustedSpeed, 0, dir3D.z * adjustedSpeed)
-
+            const force = new CANNON.Vec3(dir3D.x * 250 * mobile.intensity, 0, dir3D.z * 250 * mobile.intensity)
             this.body.applyForce(force, this.body.position)
 
             if (this.animation.actions.current !== this.animation.actions.walking) {
                 this.animation.play('walking')
             }
 
-            // Rotar suavemente en dirección de avance
             const angle = Math.atan2(dir3D.x, dir3D.z)
             this.group.rotation.y = angle
             this.body.quaternion.setFromEuler(0, this.group.rotation.y, 0)
         }
     }
+
     die() {
-        if (this.animation.actions.current !== this.animation.actions.death) {
-            this.isDead = true
-            this.animation.actions.current.fadeOut(0.2)
-            this.animation.actions.death.reset().fadeIn(0.2).play()
-            this.animation.actions.current = this.animation.actions.death
+        if (this.isDead) return
+        this.isDead = true
 
-            this.walkSound.stop()
+        this.walkSound.stop()
 
-            // 💥 Eliminar cuerpo del mundo para evitar errores
-            if (this.physics.world.bodies.includes(this.body)) {
-                this.physics.world.removeBody(this.body)
-            }
-            this.body = null  // prevenir referencias rotas
-
-            // Ajustes visuales (opcional)
-            this.group.position.y -= 0.5
-            this.group.rotation.x = -Math.PI / 2
-
-            console.log(' Robot ha muerto')
+        const deathAction   = this.animation.actions.death
+        const currentAction = this.animation.actions.current
+        if (deathAction && deathAction !== currentAction) {
+            currentAction.fadeOut(0.2)
+            deathAction.reset().fadeIn(0.2).play()
+            this.animation.actions.current = deathAction
         }
+
+        if (this.body && this.physics.world.bodies.includes(this.body)) {
+            this.physics.world.removeBody(this.body)
+        }
+        this.body = null
+
+        this.group.position.y -= 0.5
+        this.group.rotation.x = -Math.PI / 2
+
+        console.log('Robot ha muerto')
     }
 
     respawn(position) {
         this.isDead = false
-        this.group.rotation.x = 0
-        this.group.position.copy(position)
-        
-        // Recrear física si se había eliminado
+
+        this.group.rotation.set(0, 0, 0)
+        this.group.scale.set(1, 1, 1)
+
         if (!this.body) {
             this.setPhysics()
         }
-        
-        this.body.position.copy(position)
+
+        const p = position || { x: 0, y: 1.5, z: 0 }
+        this.body.position.set(p.x, p.y, p.z)
         this.body.velocity.set(0, 0, 0)
         this.body.angularVelocity.set(0, 0, 0)
         this.body.quaternion.setFromEuler(0, 0, 0)
-        
-        this.animation.play('idle')
+
+        const idle = this.animation.actions.idle
+        if (idle && this.animation.actions.current !== idle) {
+            this.animation.actions.current?.stop()
+            idle.reset().play()
+            this.animation.actions.current = idle
+        }
+
+        this.points = 0
+        console.log('Robot respawneado en', p)
     }
-
-
-
 }

@@ -69,22 +69,23 @@ export default class GameTracker {
 
         this.modal.show({
             icon: '🏁',
-            message: `¡Felicidades!\nTerminaste la partida.\n⏱ Tu tiempo: ${currentTime}s\n\n🏆 Mejores tiempos:\n${ranking}`,
+            message: `¡Felicidades!\nTerminaste todos los niveles.\n⏱ Tu tiempo: ${currentTime}s\n\n🏆 Mejores tiempos:\n${ranking}`,
             buttons: [
                 {
-                    text: '🔁 Reintentar',
+                    text: '🎮 Jugar de nuevo',
                     onClick: () => {
-                        window.experience.resetGameToFirstLevel();
+                        window.experience.resetGameToFirstLevel()
                     }
                 },
                 {
-                    text: '❌ Cancelar',
+                    text: '❌ Salir',
                     onClick: () => {
-                        this.modal.hide()
-                        this.showReplayButton()
+                        localStorage.removeItem('token')
+                        localStorage.removeItem('isGuest')
+                        localStorage.removeItem('username')
+                        window.location.reload()
                     }
                 }
-
             ]
         })
 

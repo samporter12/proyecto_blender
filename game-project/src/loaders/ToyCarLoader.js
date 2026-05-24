@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import { createBoxShapeFromModel, createTrimeshShapeFromModel } from '../Experience/Utils/PhysicsShapeFactory.js';
 import Prize from '../Experience/World/Prize.js';
 
+const LEVEL_SCALE = 2.0;
+
 export default class ToyCarLoader {
     constructor(experience) {
         this.experience = experience;
@@ -11,6 +13,7 @@ export default class ToyCarLoader {
         this.physics = this.experience.physics;
         this.prizes = [];
         this.portalModels = [];
+        this.loadedLevelModelNames = new Set();
     }
 
     _applyTextureToMeshes(root, imagePath, matcher, options = {}) {
@@ -144,13 +147,9 @@ export default class ToyCarLoader {
                 //console.log('🧩 Lista de bloques:', blocks.map(b => b.name))
             } catch (apiError) {
                 console.warn('No se pudo conectar con la API. Cargando desde archivo local...');
-                const localRes = await fetch('/data/toy_car_blocks.json');
-                const allBlocks = await localRes.json();
-
-                // 🔍 Filtrar solo nivel 1
-                blocks = allBlocks.filter(b => b.level === 1);
+                const localRes = await fetch('/models/toycar/toy_car_blocks1.json');
+                blocks = await localRes.json();
                 console.log(`Datos cargados desde archivo local (nivel 1): ${blocks.length}`);
-
             }
 
             await this._processBlocks(blocks, precisePhysicsModels);
@@ -181,25 +180,55 @@ export default class ToyCarLoader {
         const loader = new GLTFLoader();
         const total = names.length;
         let done = 0;
+        const CONCURRENCY = 10;
+        let currentIndex = 0;
 
-        await Promise.all(names.map(name => new Promise((resolve) => {
-            loader.load(
-                `/models/toycar/${name}.glb`,
-                (gltf) => {
-                    this.resources.items[name] = gltf;
-                    done++;
-                    window.dispatchEvent(new CustomEvent('level-loading-progress', {
-                        detail: Math.floor((done / total) * 100)
-                    }));
-                    resolve();
-                },
-                undefined,
-                () => {
-                    done++;
-                    resolve();
-                }
-            );
-        })));
+        await new Promise((resolveAll) => {
+            const remaining = { count: total };
+            if (total === 0) { resolveAll(); return; }
+
+            const loadNext = () => {
+                if (currentIndex >= names.length) return;
+                const name = names[currentIndex++];
+
+                loader.load(
+                    `/models/toycar/${name}.glb`,
+                    (gltf) => {
+                        this.resources.items[name] = gltf;
+                        this.loadedLevelModelNames.add(name);
+                        done++;
+                        window.dispatchEvent(new CustomEvent('level-loading-progress', {
+                            detail: Math.floor((done / total) * 100)
+                        }));
+                        remaining.count--;
+                        if (remaining.count === 0) resolveAll();
+                        else loadNext();
+                    },
+                    undefined,
+                    () => {
+                        done++;
+                        remaining.count--;
+                        if (remaining.count === 0) resolveAll();
+                        else loadNext();
+                    }
+                );
+            };
+
+            const initialBatch = Math.min(CONCURRENCY, names.length);
+            for (let i = 0; i < initialBatch; i++) loadNext();
+        });
+    }
+
+    disposeLevelModels() {
+        for (const name of this.loadedLevelModelNames) {
+            this.resources.disposeModel(name);
+        }
+        this.loadedLevelModelNames.clear();
+        if (this.textureCache) {
+            Object.values(this.textureCache).forEach(tex => tex.dispose());
+            this.textureCache = {};
+        }
+        this._bakedTexture = null;
     }
 
     async _processBlocks(blocks, precisePhysicsModels) {
@@ -217,10 +246,35 @@ export default class ToyCarLoader {
             await this._loadMissingModels([...missingModels]);
         }
 
+        // Track models already in resources that this level uses
+        blocks.forEach(block => {
+            if (block.name && !block.name.startsWith('coin') && !block.name.toLowerCase().includes('plane')) {
+                if (this.resources.items[block.name]) {
+                    this.loadedLevelModelNames.add(block.name);
+                }
+            }
+        });
+
+        // Detectar si los modelos están elevados y calcular offset Y
+        let yOffset = 0;
+        const sampleBlock = blocks.find(b =>
+            b.name && !b.name.startsWith('coin') &&
+            !b.name.toLowerCase().includes('plane') &&
+            !b.name.startsWith('boundary') &&
+            this.resources.items[b.name]
+        );
+        if (sampleBlock) {
+            const sampleY = this.resources.items[sampleBlock.name].scene.position.y;
+            if (sampleY > 1.5) {
+                yOffset = sampleY;
+                console.log(`📐 Offset Y detectado: -${yOffset.toFixed(2)} (nivel elevado en Blender)`);
+            }
+        }
+
         const CHUNK_SIZE = 50;
         for (let i = 0; i < blocks.length; i += CHUNK_SIZE) {
             const chunk = blocks.slice(i, i + CHUNK_SIZE);
-            this._processChunk(chunk, precisePhysicsModels);
+            this._processChunk(chunk, precisePhysicsModels, yOffset);
 
             if (i + CHUNK_SIZE < blocks.length) {
                 await new Promise(resolve => setTimeout(resolve, 10));
@@ -228,7 +282,7 @@ export default class ToyCarLoader {
         }
     }
 
-    _processChunk(blocks, precisePhysicsModels) {
+    _processChunk(blocks, precisePhysicsModels, yOffset = 0) {
         blocks.forEach(block => {
             if (!block.name) {
                 return;
@@ -247,7 +301,7 @@ export default class ToyCarLoader {
 
                 const prize = new Prize({
                     model: actualModel,
-                    position: new THREE.Vector3(block.x, block.y, block.z),
+                    position: new THREE.Vector3(block.x * LEVEL_SCALE, block.y, block.z * LEVEL_SCALE),
                     scene: this.scene,
                     role: block.role || "default"
                 });
@@ -266,6 +320,11 @@ export default class ToyCarLoader {
 
             const model = glb.scene.clone();
             model.userData.levelObject = true;
+            if (yOffset !== 0) model.position.y -= yOffset;
+
+            model.position.x *= LEVEL_SCALE;
+            model.position.z *= LEVEL_SCALE;
+            model.scale.set(LEVEL_SCALE, LEVEL_SCALE, LEVEL_SCALE);
 
             model.traverse((child) => {
                 if (child.isCamera || child.isLight) {
@@ -319,10 +378,7 @@ export default class ToyCarLoader {
                 shape = createBoxShapeFromModel(model, 0.9);
                 const bbox = new THREE.Box3().setFromObject(model);
                 const center = new THREE.Vector3();
-                const size = new THREE.Vector3();
                 bbox.getCenter(center);
-                bbox.getSize(size);
-                center.y -= size.y / 2;
                 position.copy(center);
             }
 

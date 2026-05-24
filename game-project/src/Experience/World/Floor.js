@@ -41,7 +41,9 @@ export default class Floor {
 
     setMaterial() {
         this.material = new THREE.MeshStandardMaterial({
-            color: 0xC2B280 // Verde
+            color: 0xEEEEE0,
+            roughness: 0.8,
+            metalness: 0.0
         })
     }
 
@@ -60,9 +62,10 @@ export default class Floor {
         ))
 
         this.body = new CANNON.Body({
-            mass: 0, // Estático
+            mass: 0,
             shape: shape,
-            position: new CANNON.Vec3(0, -this.size.height / 2, 0)
+            position: new CANNON.Vec3(0, -this.size.height / 2, 0),
+            material: this.physics.floorMaterial
         })
 
         this.physics.world.addBody(this.body)

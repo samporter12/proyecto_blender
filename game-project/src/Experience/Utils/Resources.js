@@ -108,4 +108,26 @@ export default class Resources extends EventEmitter {
             this.trigger('ready')
         }
     }
+
+    disposeModel(name) {
+        const item = this.items[name]
+        if (!item) return
+
+        if (item.scene) {
+            item.scene.traverse((child) => {
+                if (child.geometry) child.geometry.dispose()
+                if (child.material) {
+                    const mats = Array.isArray(child.material) ? child.material : [child.material]
+                    mats.forEach((mat) => {
+                        Object.values(mat).forEach((val) => {
+                            if (val && val.isTexture) val.dispose()
+                        })
+                        mat.dispose()
+                    })
+                }
+            })
+        }
+
+        delete this.items[name]
+    }
 }

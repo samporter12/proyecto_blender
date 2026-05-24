@@ -24,7 +24,7 @@ export default class KeyboardControls extends EventEmitter {
             if (event.key === 'ArrowLeft' || event.key.toLowerCase() === 'a') this.keys.left = true
             if (event.key === 'ArrowRight' || event.key.toLowerCase() === 'd') this.keys.right = true
             if (event.code === 'Space') this.keys.space = true
-            if (event.key === 'Shift') this.keys.shift = true
+            if (event.code === 'ShiftLeft' || event.code === 'ShiftRight') this.keys.shift = true
             this.trigger('change', this.keys)
         })
 
@@ -34,7 +34,7 @@ export default class KeyboardControls extends EventEmitter {
             if (event.key === 'ArrowLeft' || event.key.toLowerCase() === 'a') this.keys.left = false
             if (event.key === 'ArrowRight' || event.key.toLowerCase() === 'd') this.keys.right = false
             if (event.code === 'Space') this.keys.space = false
-            if (event.key === 'Shift') this.keys.shift = false
+            if (event.code === 'ShiftLeft' || event.code === 'ShiftRight') this.keys.shift = false
             this.trigger('change', this.keys)
         })
     }
